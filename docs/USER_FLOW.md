@@ -9,10 +9,11 @@
 
 ## 핵심 개념
 
-### WorkRecord의 이중 역할
-- **근무 일정 (SCHEDULED)**: 고용주가 미리 등록하는 예정된 근무
-- **근무 중 (WORKING)**: 출근 처리되어 현재 근무 중인 상태
-- **근무 확정 (CONFIRMED)**: 퇴근 처리되어 근무가 완료된 기록
+### WorkRecord의 이중 역할과 4가지 상태
+- **예정 (SCHEDULED)**: 고용주가 미리 등록한 근무 예정 상태 (근무 전)
+- **수정 (MODIFIED_BEFORE)**: 근무 시작 전에 시간이 변경된 상태 (근무 전)
+- **완료 (COMPLETED)**: 근무가 완료되고 확정된 상태 (근무 후)
+- **수정 (MODIFIED_AFTER)**: 근무 완료 후 시간이 수정된 상태 (근무 후, 정정 요청 승인 시)
 - 하나의 엔티티로 일정과 기록을 모두 관리하여 데이터 일관성 유지
 
 ### 시간 필드 단순화
@@ -157,7 +158,9 @@ VALUES
 
 상태별 스타일:
 - SCHEDULED: 기본 스타일 (실선 테두리)
-- CONFIRMED: 진하게 표시 (채워진 배경)
+- MODIFIED_BEFORE: 수정된 스타일 (점선 테두리)
+- COMPLETED: 진하게 표시 (채워진 배경)
+- MODIFIED_AFTER: 진하게 표시 + 수정 표시 (채워진 배경 + 별표)
 ```
 
 **API 호출:**
@@ -183,63 +186,45 @@ Response:
 
 ---
 
-#### 5️⃣ 출퇴근 처리
+#### 5️⃣ 근무 완료 처리
 
 ```
-시나리오 1: 근로자가 직접 출퇴근 처리
+시나리오: 근로자가 근무를 완료합니다.
 
-11월 1일 09:00, 김민지가 출근합니다.
+11월 1일 14:05, 김민지가 근무를 완료합니다.
 ┌─────────────────────────────────────┐
-│ 🕐 출근 처리                        │
+│ 🕐 근무 완료 처리                   │
 ├─────────────────────────────────────┤
 │ 근무지: 홍대점                       │
 │ 예정 시간: 09:00 ~ 14:00            │
 │                                     │
-│ [출근하기]                          │
+│ [근무 완료]                         │
 └─────────────────────────────────────┘
 
-출근 버튼 클릭 → SCHEDULED → WORKING
-
-11월 1일 14:05, 김민지가 퇴근합니다.
-┌─────────────────────────────────────┐
-│ 🕐 퇴근 처리                        │
-├─────────────────────────────────────┤
-│ 근무지: 홍대점                       │
-│ 출근 시각: 09:00                    │
-│                                     │
-│ [퇴근하기]                          │
-└─────────────────────────────────────┘
-
-퇴근 버튼 클릭 → WORKING → CONFIRMED
+근무 완료 버튼 클릭 → SCHEDULED → COMPLETED
+(또는 MODIFIED_BEFORE → COMPLETED)
 ```
 
 **데이터베이스 변화:**
 ```sql
--- 1. 출근 처리
+-- 근무 완료 처리
 UPDATE WorkRecord
-SET status = 'WORKING',
-    updated_at = NOW()
-WHERE id = 1;
-
--- 2. 퇴근 처리 (시간 수정 필요시)
-UPDATE WorkRecord
-SET end_time = '14:05',  -- 예정 14:00 → 실제 14:05
-    total_hours = 5.08,  -- 자동 계산
-    regular_hours = 5.08,
-    status = 'CONFIRMED',
+SET status = 'COMPLETED',
+    total_hours = 5.0,   -- 자동 계산
+    regular_hours = 5.0,
     updated_at = NOW()
 WHERE id = 1;
 ```
 
 ---
 
-#### 6️⃣ 근무 일정 변경
+#### 6️⃣ 근무 일정 변경 (근무 전)
 
 ```
 시나리오: 11월 10일, 박성호 사장님이 11월 15일 일정을 변경합니다.
 
-변경 전: 09:00~14:00
-변경 후: 10:00~15:00
+변경 전: 09:00~14:00 (SCHEDULED)
+변경 후: 10:00~15:00 (MODIFIED_BEFORE)
 
 ┌─────────────────────────────────────┐
 │ 일정 수정                           │
@@ -257,10 +242,11 @@ WHERE id = 1;
 
 **데이터베이스 변화:**
 ```sql
--- WorkRecord 업데이트 (SCHEDULED 상태)
+-- WorkRecord 업데이트 (SCHEDULED → MODIFIED_BEFORE)
 UPDATE WorkRecord
 SET start_time = '10:00',
     end_time = '15:00',
+    status = 'MODIFIED_BEFORE',
     memo = '재고 정리 예정',
     updated_at = NOW()
 WHERE id = 15;
@@ -276,7 +262,7 @@ VALUES
 
 ---
 
-#### 7️⃣ 정정 요청 처리
+#### 7️⃣ 정정 요청 처리 (근무 후)
 
 ```
 시나리오: 김민지가 11월 1일 근무 시간 정정을 요청했습니다.
@@ -319,11 +305,12 @@ SET status = 'APPROVED',
     review_comment = '확인했습니다'
 WHERE id = 1;
 
--- 2. WorkRecord 업데이트
+-- 2. WorkRecord 업데이트 (COMPLETED → MODIFIED_AFTER)
 UPDATE WorkRecord
-SET end_time = '14:30',  -- 14:00 → 14:30
-    total_hours = 5.5,   -- 자동 재계산
+SET end_time = '14:30',     -- 14:00 → 14:30
+    total_hours = 5.5,      -- 자동 재계산
     regular_hours = 5.5,
+    status = 'MODIFIED_AFTER',
     updated_at = NOW()
 WHERE id = 1;
 
@@ -343,8 +330,8 @@ VALUES
 11월 30일, 시스템이 자동으로 김민지의 월급을 계산합니다.
 
 계산 조건:
-- CONFIRMED 상태의 WorkRecord만 집계
-- SCHEDULED 상태는 제외 (아직 근무 안 함)
+- COMPLETED, MODIFIED_AFTER 상태의 WorkRecord만 집계
+- SCHEDULED, MODIFIED_BEFORE 상태는 제외 (아직 근무 안 함)
 
 집계 결과:
 - 총 근무일: 20일
@@ -498,7 +485,9 @@ VALUES
 
 상태 표시:
 - (예정): SCHEDULED - 아직 근무 안 함
-- (확정): CONFIRMED - 근무 완료 및 확정됨
+- (수정): MODIFIED_BEFORE - 근무 전 시간 변경됨
+- (완료): COMPLETED - 근무 완료
+- (수정*): MODIFIED_AFTER - 근무 완료 후 시간 수정됨
 ```
 
 **API 호출:**
@@ -521,9 +510,9 @@ Response:
   {
     "id": 3,
     "work_date": "2025-11-03",
-    "start_time": "09:00",
-    "end_time": null,  -- 퇴근 전
-    "status": "WORKING",
+    "start_time": "10:00",
+    "end_time": "15:00",
+    "status": "MODIFIED_BEFORE",
     "workplace": {
       "name": "홍대점",
       "color_code": "#FF6B6B"
@@ -534,7 +523,7 @@ Response:
     "work_date": "2025-11-05",
     "start_time": "09:00",
     "end_time": "14:05",
-    "status": "CONFIRMED",
+    "status": "COMPLETED",
     "workplace": {
       "name": "홍대점",
       "color_code": "#FF6B6B"
@@ -667,12 +656,8 @@ Response:
   → "이번 달 20일 근무 예정, 예상 급여: 1,000,000원"
 
 11월 1일 퇴근 후:
-[김민지] 출근 처리 (09:00)
-  → WorkRecord #1 상태: SCHEDULED → WORKING
-
-[김민지] 퇴근 처리 (14:05)
-  → WorkRecord #1 상태: WORKING → CONFIRMED
-  → end_time: 14:00 → 14:05 자동 업데이트
+[김민지] 근무 완료 처리 (14:00)
+  → WorkRecord #1 상태: SCHEDULED → COMPLETED
 
 11월 2일:
 [김민지] 어제 30분 더 일한 거 생각나서 정정 요청
@@ -680,10 +665,12 @@ Response:
 
 [박성호 사장] 알림 받고 승인
   → CorrectionRequest 승인
+  → WorkRecord #1 상태: COMPLETED → MODIFIED_AFTER
   → WorkRecord #1 업데이트 (14:00 → 14:30)
 
 11월 15일:
 [박성호 사장] 갑자기 일정 변경 필요
+  → WorkRecord #15 상태: SCHEDULED → MODIFIED_BEFORE
   → WorkRecord #15 업데이트 (09:00~14:00 → 10:00~15:00)
   → 김민지에게 알림 발송
 
@@ -693,7 +680,7 @@ Response:
 11월 30일 자정:
 [시스템] 자동 급여 계산
   → Salary 레코드 생성
-  → CONFIRMED 상태 WorkRecord 20개 집계
+  → COMPLETED, MODIFIED_AFTER 상태 WorkRecord 20개 집계
   → 총 근무 110시간, 실수령액 1,008,000원 계산
 
 11월 25일:
@@ -749,28 +736,30 @@ Response:
    - WorkRecord를 SCHEDULED 상태로 생성
    - 일괄 등록 기능으로 한 번에 여러 일정 등록
 
-2. ✅ 근무 완료 후 확정
-   - actual 시간 입력
-   - SCHEDULED → CONFIRMED 상태 변경
-
-3. ✅ 일정 변경
-   - SCHEDULED 상태의 WorkRecord 수정
+2. ✅ 근무 전 일정 변경
+   - SCHEDULED → MODIFIED_BEFORE 상태 변경
    - 근로자에게 자동 알림
 
-4. ✅ 정정 요청 승인/반려
-   - CONFIRMED 상태의 WorkRecord 수정
+3. ✅ 근무 완료 처리
+   - SCHEDULED/MODIFIED_BEFORE → COMPLETED 상태 변경
+
+4. ✅ 정정 요청 승인/반려 (근무 후)
+   - COMPLETED → MODIFIED_AFTER 상태 변경
 
 5. ✅ 급여 송금
-   - CONFIRMED 기록 기반 자동 계산된 급여 확인
+   - COMPLETED/MODIFIED_AFTER 기록 기반 자동 계산된 급여 확인
    - 송금 처리
 
 ### 근로자 핵심 기능
 1. ✅ 근무 일정 확인
    - SCHEDULED: 예정된 근무
-   - CONFIRMED: 완료된 근무
+   - MODIFIED_BEFORE: 수정된 예정 근무
+   - COMPLETED: 완료된 근무
+   - MODIFIED_AFTER: 수정된 완료 근무
 
 2. ✅ 정정 요청
-   - CONFIRMED 기록에 대해 수정 요청
+   - COMPLETED 기록에 대해 수정 요청
+   - 승인 시 MODIFIED_AFTER로 변경
 
 3. ✅ 급여 통계 확인
    - 월별 급여 차트
@@ -783,10 +772,10 @@ Response:
 
 ### 시스템 자동화
 1. ✅ WorkRecord 상태 관리
-   - SCHEDULED → CONFIRMED 흐름
+   - SCHEDULED → MODIFIED_BEFORE → COMPLETED → MODIFIED_AFTER 흐름
 
 2. ✅ 급여 자동 계산
-   - CONFIRMED 상태 레코드만 집계
+   - COMPLETED, MODIFIED_AFTER 상태 레코드만 집계
    - 연장/야간/휴일 수당 자동 계산
 
 3. ✅ 실시간 알림
@@ -805,27 +794,32 @@ Response:
    │               │
    │               ├─→ [근무 일정 등록] ← 핵심!
    │               │    (WorkRecord: SCHEDULED)
+   │               │         │
+   │               │         ├─→ [근무 전 일정 변경]
+   │               │         │    (SCHEDULED → MODIFIED_BEFORE)
+   │               │         │         │
+   │               │         │         └─→ [알림] → [근로자]
+   │               │         │
+   │               │         └─→ [근무 완료]
+   │               │              (SCHEDULED/MODIFIED_BEFORE → COMPLETED)
+   │               │                   │
+   │               │                   ├─→ [정정 요청] ← [근로자]
+   │               │                   │        │
+   │               │                   │   [승인 시]
+   │               │                   │        │
+   │               │                   │        v
+   │               │                   │   (COMPLETED → MODIFIED_AFTER)
+   │               │                   │
+   │               │                   └─→ [급여 자동 계산]
+   │               │                            │
+   │               │                            └─→ [송금]
+   │               │                                 │
+   │               │                                 └─→ [알림] → [근로자]
    │               │
-   │               ├─→ [근무 확정]
-   │               │    (WorkRecord: CONFIRMED)
-   │               │        │
-   │               │        ├─→ [정정 요청] ← [근로자]
-   │               │        │        │
-   │               │        │        └─→ [승인/반려]
-   │               │        │
-   │               │        └─→ [급여 자동 계산]
-   │               │                 │
-   │               │                 └─→ [송금]
-   │               │                      │
-   │               │                      └─→ [알림] → [근로자]
-   │               │
-   │               └─→ [일정 변경]
-   │                    (WorkRecord 수정)
-   │                         │
-   │                         └─→ [알림] → [근로자]
+   │               └─→ [캘린더 조회]
+   │                    (모든 상태 표시: SCHEDULED/MODIFIED_BEFORE/COMPLETED/MODIFIED_AFTER)
    │
    └─→ [캘린더 조회]
-        (SCHEDULED + CONFIRMED 모두 표시)
 ```
 
 ---
@@ -836,35 +830,39 @@ Response:
 [고용주가 일정 등록]
          │
          v
-    SCHEDULED ──────┐
-         │          │
-         │    [일정 변경]
-         │          │
-         │          v
-         │     (start/end 시간 수정)
-         │          │
-         │          │
-    [출근 처리]     │
-         │          │
-         v          │
-     WORKING ◀──────┘
-         │
-         │
-    [퇴근 처리]
-         │
-         v
-    CONFIRMED
-         │
-         ├─→ [정정 요청]
-         │        │
-         │   [승인 시]
-         │        │
-         │        v
-         │   (start/end 시간 수정)
-         │        │
-         │        │
-         └────────┴─→ [급여 계산에 사용]
-                           │
-                           v
-                      [Salary 생성]
+    SCHEDULED ────────────┐
+         │                │
+         │          [근무 전 수정]
+         │                │
+         │                v
+         │        MODIFIED_BEFORE
+         │                │
+         │                │
+         └────────┬───────┘
+                  │
+            [근무 완료]
+                  │
+                  v
+             COMPLETED ──────────┐
+                  │              │
+                  │        [근무 후 수정]
+                  │        (정정 요청 승인)
+                  │              │
+                  │              v
+                  │      MODIFIED_AFTER
+                  │              │
+                  │              │
+                  └──────┬───────┘
+                         │
+                   [급여 계산에 사용]
+                         │
+                         v
+                   [Salary 생성]
+
+상태 전이 규칙:
+1. SCHEDULED → MODIFIED_BEFORE: 근무 전 시간 수정
+2. SCHEDULED → COMPLETED: 근무 완료 (시간 변경 없음)
+3. MODIFIED_BEFORE → COMPLETED: 근무 완료
+4. COMPLETED → MODIFIED_AFTER: 정정 요청 승인 (근무 후 수정)
+5. 급여 계산: COMPLETED 또는 MODIFIED_AFTER 상태만 집계
 ```
