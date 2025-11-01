@@ -82,16 +82,14 @@ erDiagram
         bigint id PK
         bigint contract_id FK "WorkerContract ID"
         date work_date "근무 날짜"
-        time scheduled_start_time "예정 시작 시간"
-        time scheduled_end_time "예정 종료 시간"
-        time actual_start_time "실제 시작 시간 (nullable)"
-        time actual_end_time "실제 종료 시간 (nullable)"
+        time start_time "시작 시간"
+        time end_time "종료 시간"
         decimal total_hours "총 근무 시간"
         decimal regular_hours "일반 근무 시간"
         decimal overtime_hours "연장 근무 시간"
         decimal night_hours "야간 근무 시간"
         decimal holiday_hours "휴일 근무 시간"
-        enum status "STATUS(SCHEDULED, CONFIRMED, PENDING, DISPUTED)"
+        enum status "STATUS(SCHEDULED, WORKING, CONFIRMED, PENDING, DISPUTED)"
         string memo "메모"
         datetime created_at
         datetime updated_at
@@ -206,16 +204,14 @@ erDiagram
 
 ### 6. WorkRecord (근무 기록 및 일정)
 - **WorkSchedule 통합**: 예정된 근무 일정과 실제 근무 기록을 하나의 엔티티로 관리
-- 고용주가 근무 일정을 등록하면 SCHEDULED 상태로 생성
-- 근무 완료 후 실제 시간을 입력하면 CONFIRMED 상태로 변경
-- **scheduled_start_time/scheduled_end_time**: 고용주가 등록한 예정 시간
-- **actual_start_time/actual_end_time**: 실제 근무 시간 (nullable, 근무 후 입력)
-- **total_hours**: 총 근무 시간 (실제 시간 기준으로 자동 계산)
+- **start_time/end_time**: 근무 시간 (등록 시 예정 시간, 수정 시 실제 시간으로 업데이트)
+- **total_hours**: 총 근무 시간 (start_time ~ end_time 기준으로 자동 계산)
 - 일반/연장/야간/휴일 근무 시간 자동 계산
 - **STATUS**:
-  - SCHEDULED: 근무 예정 (고용주가 등록, actual 시간 없음)
-  - CONFIRMED: 근무 확정 (실제 근무 완료, actual 시간 입력됨)
-  - PENDING: 검토 대기 (정정 요청 등)
+  - SCHEDULED: 근무 예정 (고용주가 등록)
+  - WORKING: 근무 중 (출근 처리됨, 퇴근 전)
+  - CONFIRMED: 근무 확정 (근무 완료 및 확정)
+  - PENDING: 검토 대기 (정정 요청 중)
   - DISPUTED: 분쟁 (근로자-고용주 간 의견 불일치)
 
 ### 7. CorrectionRequest (정정 요청)
@@ -259,17 +255,19 @@ erDiagram
 ## 화면 설계 반영 사항
 
 ### 고용주 화면 반영
-1. **주간/월간 캘린더**: WorkRecord 엔티티로 구현 (SCHEDULED 상태 = 예정, CONFIRMED = 완료)
+1. **주간/월간 캘린더**: WorkRecord 엔티티로 구현 (상태별 표시: SCHEDULED/WORKING/CONFIRMED)
 2. **근무지별 색상**: Workplace.color_code 필드 추가
 3. **근무 일정 등록**: 고용주가 WorkRecord를 SCHEDULED 상태로 생성
-4. **월급 관리**: Salary 엔티티의 월별 데이터 조회
-5. **근무 통계**: Salary의 year, month 기반 집계 데이터
+4. **출퇴근 관리**: SCHEDULED → WORKING → CONFIRMED 상태 변화
+5. **월급 관리**: Salary 엔티티의 월별 데이터 조회
+6. **근무 통계**: Salary의 year, month 기반 집계 데이터
 
 ### 근로자 화면 반영
 1. **근무 일정 확인**: WorkRecord 조회 (status별 필터링)
-2. **수정 요청**: CorrectionRequest 엔티티 (날짜, 시작/종료 시간, 사유)
-3. **월별 급여 통계**: Salary 데이터를 차트로 시각화
-4. **알림 설정**: UserSettings 엔티티로 관리
+2. **출퇴근 처리**: 출근 시 WORKING, 퇴근 시 CONFIRMED
+3. **수정 요청**: CorrectionRequest 엔티티 (날짜, 시작/종료 시간, 사유)
+4. **월별 급여 통계**: Salary 데이터를 차트로 시각화
+5. **알림 설정**: UserSettings 엔티티로 관리
 
 ## 인덱스 전략
 
@@ -301,16 +299,18 @@ erDiagram
 ### 고용주 API
 - `GET /api/employer/workplaces` - 근무지 목록 조회
 - `GET /api/employer/workplaces/{id}/workers` - 근무지별 근로자 조회
-- `GET /api/employer/work-records?workplace_id={id}&year={year}&month={month}` - 캘린더 조회 (SCHEDULED + CONFIRMED)
+- `GET /api/employer/work-records?workplace_id={id}&year={year}&month={month}` - 캘린더 조회
 - `POST /api/employer/work-records` - 근무 일정 등록 (SCHEDULED 상태로 생성)
-- `PUT /api/employer/work-records/{id}` - 근무 일정/기록 수정
-- `PUT /api/employer/work-records/{id}/confirm` - 근무 확정 (actual 시간 입력, CONFIRMED 상태로 변경)
+- `PUT /api/employer/work-records/{id}` - 근무 시간 수정
+- `PUT /api/employer/work-records/{id}/status` - 상태 변경 (SCHEDULED → WORKING → CONFIRMED)
 - `GET /api/employer/salaries?workplace_id={id}&year={year}&month={month}` - 급여 관리
 - `GET /api/employer/correction-requests` - 정정 요청 목록
 - `PUT /api/employer/correction-requests/{id}` - 정정 요청 승인/반려
 
 ### 근로자 API
 - `GET /api/worker/work-records?year={year}&month={month}` - 근무 일정 및 기록 조회
+- `PUT /api/worker/work-records/{id}/check-in` - 출근 처리 (SCHEDULED → WORKING)
+- `PUT /api/worker/work-records/{id}/check-out` - 퇴근 처리 (WORKING → CONFIRMED)
 - `POST /api/worker/correction-requests` - 정정 요청 생성
 - `GET /api/worker/salaries?year={year}` - 월별 급여 통계
 - `GET /api/worker/payments` - 송금 내역 조회
