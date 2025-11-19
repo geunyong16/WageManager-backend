@@ -1,7 +1,9 @@
 package com.example.wagemanager.global.security;
 
+import com.example.wagemanager.common.dto.ApiResponse;
 import com.example.wagemanager.domain.user.entity.User;
 import com.example.wagemanager.domain.user.repository.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,6 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -62,6 +65,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         } catch (Exception ex) {
             logger.error("Could not set user authentication in security context", ex);
+
+            // 클라이언트에게 401 Unauthorized 응답 전달
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+
+            ApiResponse<Void> errorResponse = ApiResponse.error(
+                "UNAUTHORIZED",
+                "인증에 실패했습니다. 유효한 토큰을 제공해주세요."
+            );
+
+            response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+            return;
         }
 
         // 다음 필터로 요청 전달
