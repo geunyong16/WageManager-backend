@@ -31,6 +31,17 @@ public class CorrectionRequest extends BaseEntity {
     @JoinColumn(name = "requester_id", nullable = false)
     private User requester;
 
+    // 원본 근무 시간 (정정요청 생성 시점의 값 저장)
+    @Column(name = "original_work_date", nullable = false)
+    private LocalDate originalWorkDate;
+
+    @Column(name = "original_start_time", nullable = false)
+    private LocalTime originalStartTime;
+
+    @Column(name = "original_end_time", nullable = false)
+    private LocalTime originalEndTime;
+
+    // 요청 근무 시간
     @Column(name = "requested_work_date", nullable = false)
     private LocalDate requestedWorkDate;
 
