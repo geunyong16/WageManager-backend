@@ -1,5 +1,6 @@
 package com.example.wagemanager.api.auth.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,6 +20,19 @@ public class AuthDto {
     @Builder
     public static class DevLoginRequest {
         private Long userId;
+    }
+
+    /**
+     * 카카오 로그인 요청 DTO
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class KakaoLoginRequest {
+
+        @NotBlank(message = "카카오 액세스 토큰은 필수입니다.")
+        private String kakaoAccessToken;
     }
 
     /**
