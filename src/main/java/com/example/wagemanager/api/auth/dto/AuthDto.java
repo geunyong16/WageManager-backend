@@ -48,4 +48,17 @@ public class AuthDto {
         private String name;
         private String userType;
     }
+
+    @Getter
+    @AllArgsConstructor
+    @Builder
+    public static class LogoutResponse {
+        private String message;
+
+        public static LogoutResponse success() {
+            return LogoutResponse.builder()
+                    .message("로그아웃되었습니다.")
+                    .build();
+        }
+    }
 }

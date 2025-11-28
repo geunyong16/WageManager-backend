@@ -49,6 +49,13 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public void logout(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("로그인이 필요합니다.");
+        }
+    }
+
     private void updateProfileIfEmpty(User user, KakaoUserInfo kakaoUserInfo) {
         String name = user.getName() == null ? kakaoUserInfo.name() : null;
         String phone = user.getPhone() == null ? normalizePhoneNumber(kakaoUserInfo.phoneNumber()) : null;

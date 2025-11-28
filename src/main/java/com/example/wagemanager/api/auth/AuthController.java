@@ -8,6 +8,7 @@ import com.example.wagemanager.domain.user.repository.UserRepository;
 import com.example.wagemanager.global.security.JwtTokenProvider;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -31,6 +32,16 @@ public class AuthController {
             @Valid @RequestBody AuthDto.KakaoLoginRequest request
     ) {
         return ApiResponse.success(authService.loginWithKakao(request.getKakaoAccessToken()));
+    }
+
+    /**
+     * JWT 기반 로그아웃 API
+     * 현재는 클라이언트가 토큰을 폐기하도록 안내
+     */
+    @PostMapping("/logout")
+    public ApiResponse<AuthDto.LogoutResponse> logout(@AuthenticationPrincipal User user) {
+        authService.logout(user != null ? user.getId() : null);
+        return ApiResponse.success(AuthDto.LogoutResponse.success());
     }
 
     /**
