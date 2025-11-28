@@ -2,8 +2,11 @@ package com.example.wagemanager.domain.auth.service;
 
 import com.example.wagemanager.api.auth.dto.AuthDto;
 import com.example.wagemanager.common.exception.NotFoundException;
+import com.example.wagemanager.domain.user.dto.UserDto;
 import com.example.wagemanager.domain.user.entity.User;
+import com.example.wagemanager.domain.user.enums.UserType;
 import com.example.wagemanager.domain.user.repository.UserRepository;
+import com.example.wagemanager.domain.user.service.UserService;
 import com.example.wagemanager.global.oauth.kakao.KakaoOAuthClient;
 import com.example.wagemanager.global.oauth.kakao.dto.KakaoUserInfo;
 import com.example.wagemanager.global.security.JwtTokenProvider;
@@ -18,6 +21,7 @@ public class AuthService {
 
     private final KakaoOAuthClient kakaoOAuthClient;
     private final UserRepository userRepository;
+    private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
 
     @Transactional
@@ -57,12 +61,63 @@ public class AuthService {
     }
 
     private void updateProfileIfEmpty(User user, KakaoUserInfo kakaoUserInfo) {
-        String name = user.getName() == null ? kakaoUserInfo.name() : null;
+        String name = user.getName() == null ? kakaoUserInfo.displayName() : null;
         String phone = user.getPhone() == null ? normalizePhoneNumber(kakaoUserInfo.phoneNumber()) : null;
         String profileImage = user.getProfileImageUrl() == null ? kakaoUserInfo.profileImageUrl() : null;
 
         if (name != null || phone != null || profileImage != null) {
             user.updateProfile(name, phone, profileImage);
+        }
+    }
+
+    @Transactional
+    public AuthDto.LoginResponse registerWithKakao(AuthDto.KakaoRegisterRequest request) {
+        if (!StringUtils.hasText(request.getKakaoAccessToken())) {
+            throw new IllegalArgumentException("카카오 액세스 토큰은 필수입니다.");
+        }
+
+        KakaoUserInfo userInfo = kakaoOAuthClient.getUserInfo(request.getKakaoAccessToken());
+        if (!StringUtils.hasText(userInfo.kakaoId())) {
+            throw new IllegalArgumentException("카카오 사용자 식별자를 확인할 수 없습니다.");
+        }
+
+        if (userRepository.findByKakaoId(userInfo.kakaoId()).isPresent()) {
+            throw new IllegalArgumentException("이미 가입된 카카오 계정입니다.");
+        }
+
+        UserDto.RegisterRequest registerRequest = UserDto.RegisterRequest.builder()
+                .kakaoId(userInfo.kakaoId())
+                .name(resolveDisplayName(userInfo))
+                .phone(normalizePhoneNumber(userInfo.phoneNumber()))
+                .profileImageUrl(userInfo.profileImageUrl())
+                .userType(parseUserType(request.getUserType()))
+                .build();
+
+        UserDto.RegisterResponse registerResponse = userService.register(registerRequest);
+
+        String token = jwtTokenProvider.generateToken(registerResponse.getUserId());
+
+        return AuthDto.LoginResponse.builder()
+                .accessToken(token)
+                .userId(registerResponse.getUserId())
+                .name(registerResponse.getName())
+                .userType(registerResponse.getUserType().name())
+                .build();
+    }
+
+    private String resolveDisplayName(KakaoUserInfo userInfo) {
+        String displayName = userInfo.displayName();
+        if (StringUtils.hasText(displayName)) {
+            return displayName;
+        }
+        throw new IllegalArgumentException("카카오 계정의 이름 정보를 확인할 수 없습니다.");
+    }
+
+    private UserType parseUserType(String userType) {
+        try {
+            return UserType.valueOf(userType.toUpperCase());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("유효하지 않은 사용자 유형입니다. EMPLOYER 또는 WORKER를 입력해주세요.");
         }
     }
 

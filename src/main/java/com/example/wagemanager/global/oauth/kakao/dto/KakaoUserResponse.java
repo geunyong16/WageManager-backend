@@ -13,6 +13,8 @@ public class KakaoUserResponse {
     @JsonProperty("kakao_account")
     private KakaoAccount kakaoAccount;
 
+    private KakaoProperties properties;
+
     @Getter
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class KakaoAccount {
@@ -33,9 +35,19 @@ public class KakaoUserResponse {
         private String profileImageUrl;
     }
 
+    @Getter
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class KakaoProperties {
+        private String nickname;
+
+        @JsonProperty("profile_image")
+        private String profileImage;
+    }
+
     public KakaoUserInfo toUserInfo() {
         String kakaoIdValue = id != null ? String.valueOf(id) : null;
         String nameValue = null;
+        String nicknameValue = null;
         String phoneValue = null;
         String profileImageValue = null;
 
@@ -45,13 +57,22 @@ public class KakaoUserResponse {
 
             KakaoProfile profile = kakaoAccount.getProfile();
             if (profile != null) {
+                nicknameValue = profile.getNickname();
                 profileImageValue = profile.getProfileImageUrl();
             }
+        }
+
+        if (nicknameValue == null && properties != null) {
+            nicknameValue = properties.getNickname();
+        }
+        if (profileImageValue == null && properties != null) {
+            profileImageValue = properties.getProfileImage();
         }
 
         return KakaoUserInfo.builder()
                 .kakaoId(kakaoIdValue)
                 .name(nameValue)
+                .nickname(nicknameValue)
                 .phoneNumber(phoneValue)
                 .profileImageUrl(profileImageValue)
                 .build();

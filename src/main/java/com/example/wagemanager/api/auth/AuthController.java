@@ -35,6 +35,17 @@ public class AuthController {
     }
 
     /**
+     * 카카오 소셜 회원가입 API
+     * 카카오 프로필 정보를 기반으로 내부 사용자 데이터 생성 후 JWT 발급
+     */
+    @PostMapping("/kakao/register")
+    public ApiResponse<AuthDto.LoginResponse> kakaoRegister(
+            @Valid @RequestBody AuthDto.KakaoRegisterRequest request
+    ) {
+        return ApiResponse.success(authService.registerWithKakao(request));
+    }
+
+    /**
      * JWT 기반 로그아웃 API
      * 현재는 클라이언트가 토큰을 폐기하도록 안내
      */

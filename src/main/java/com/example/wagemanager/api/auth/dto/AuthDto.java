@@ -36,6 +36,22 @@ public class AuthDto {
     }
 
     /**
+     * 카카오 기반 회원가입 요청 DTO
+     */
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class KakaoRegisterRequest {
+
+        @NotBlank(message = "카카오 액세스 토큰은 필수입니다.")
+        private String kakaoAccessToken;
+
+        @NotBlank(message = "사용자 유형은 필수입니다.")
+        private String userType;
+    }
+
+    /**
      * 로그인 응답 DTO
      */
     @Getter
