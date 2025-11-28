@@ -1,6 +1,7 @@
 package com.example.wagemanager.domain.contract.dto;
 
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
+import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public class ContractDto {
 
@@ -16,12 +18,29 @@ public class ContractDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class CreateRequest {
+        @NotBlank(message = "근로자 코드는 필수입니다.")
         private String workerCode;
+
+        @NotNull(message = "시급은 필수입니다.")
+        @DecimalMin(value = "10030.0", inclusive = true, message = "시급은 10,030 이상이어야 합니다.")
         private BigDecimal hourlyWage;
-        private String workDays; // JSON: [1,2,3,4,5,6,7]
+
+        @NotNull(message = "근무 요일은 필수입니다.")
+        @Size(min = 1, message = "최소 1개의 근무 요일을 선택해야 합니다.")
+        private List<@Min(value = 1, message = "근무 요일은 1~7 사이여야 합니다.") @Max(value = 7, message = "근무 요일은 1~7 사이여야 합니다.") Integer> workDays;
+
+        @NotNull(message = "계약 시작일은 필수입니다.")
         private LocalDate contractStartDate;
+
         private LocalDate contractEndDate;
+
+        @NotNull(message = "급여 지급일은 필수입니다.")
+        @Min(value = 1, message = "급여 지급일은 1일 이상이어야 합니다.")
+        @Max(value = 31, message = "급여 지급일은 31일 이하여야 합니다.")
         private Integer paymentDay;
+
+        @NotNull(message = "4대보험 적용 여부는 필수입니다.")
+        private Boolean applyInsuranceAndTax;
     }
 
     @Getter
@@ -29,10 +48,20 @@ public class ContractDto {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class UpdateRequest {
+        @DecimalMin(value = "10030.0", inclusive = true, message = "시급은 10,030 이상이어야 합니다.")
         private BigDecimal hourlyWage;
-        private String workDays;
+
+        @Size(min = 1, message = "최소 1개의 근무 요일을 선택해야 합니다.")
+        private List<@Min(value = 1, message = "근무 요일은 1~7 사이여야 합니다.") @Max(value = 7, message = "근무 요일은 1~7 사이여야 합니다.") Integer> workDays;
+
         private LocalDate contractEndDate;
+
+        @Min(value = 1, message = "급여 지급일은 1일 이상이어야 합니다.")
+        @Max(value = 31, message = "급여 지급일은 31일 이하여야 합니다.")
         private Integer paymentDay;
+
+        @NotNull(message = "4대보험 적용 여부는 필수입니다.")
+        private Boolean applyInsuranceAndTax;
     }
 
     @Getter
@@ -53,6 +82,7 @@ public class ContractDto {
         private LocalDate contractEndDate;
         private Integer paymentDay;
         private Boolean isActive;
+        private Boolean applyInsuranceAndTax;
 
         public static Response from(WorkerContract contract) {
             return Response.builder()
@@ -69,6 +99,7 @@ public class ContractDto {
                     .contractEndDate(contract.getContractEndDate())
                     .paymentDay(contract.getPaymentDay())
                     .isActive(contract.getIsActive())
+                    .applyInsuranceAndTax(contract.getApplyInsuranceAndTax())
                     .build();
         }
     }
