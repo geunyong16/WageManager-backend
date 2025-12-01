@@ -3,6 +3,7 @@ package com.example.wagemanager.domain.workrecord.entity;
 import com.example.wagemanager.common.BaseEntity;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
 import com.example.wagemanager.domain.workrecord.enums.WorkRecordStatus;
+import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -29,8 +30,17 @@ public class WorkRecord extends BaseEntity {
     @JoinColumn(name = "contract_id", nullable = false)
     private WorkerContract contract;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "weekly_allowance_id")
+    private WeeklyAllowance weeklyAllowance;
+
     @Column(name = "work_date", nullable = false)
     private LocalDate workDate;
+
+    // WeeklyAllowance 설정
+    public void setWeeklyAllowance(WeeklyAllowance weeklyAllowance) {
+        this.weeklyAllowance = weeklyAllowance;
+    }
 
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;

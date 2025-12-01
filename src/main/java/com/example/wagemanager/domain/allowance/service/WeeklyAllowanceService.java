@@ -1,0 +1,85 @@
+package com.example.wagemanager.domain.allowance.service;
+
+import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
+import com.example.wagemanager.domain.allowance.repository.WeeklyAllowanceRepository;
+import com.example.wagemanager.domain.contract.entity.WorkerContract;
+import com.example.wagemanager.domain.contract.repository.WorkerContractRepository;
+import com.example.wagemanager.domain.workrecord.entity.WorkRecord;
+import com.example.wagemanager.domain.workrecord.repository.WorkRecordRepository;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class WeeklyAllowanceService {
+
+    private final WeeklyAllowanceRepository weeklyAllowanceRepository;
+    private final WorkRecordRepository workRecordRepository;
+    private final WorkerContractRepository workerContractRepository;
+
+    public List<WeeklyAllowance> getWeeklyAllowancesByContract(Long contractId) {
+        return weeklyAllowanceRepository.findByContractId(contractId);
+    }
+
+    /**
+     * WorkRecord 생성/수정 시 호출
+     * 해당 주의 WeeklyAllowance를 조회하거나 생성하고, 수당을 재계산
+     */
+    @Transactional
+    public WeeklyAllowance getOrCreateWeeklyAllowanceForDate(Long contractId, LocalDate workDate) {
+        // 해당 주에 이미 WeeklyAllowance가 있는지 조회
+        Optional<WeeklyAllowance> existingAllowance = weeklyAllowanceRepository.findByContractAndWeek(contractId, workDate);
+
+        if (existingAllowance.isPresent()) {
+            // 기존 WeeklyAllowance가 있으면 반환
+            return existingAllowance.get();
+        }
+
+        // 없으면 새로 생성
+        WorkerContract contract = workerContractRepository.findById(contractId)
+                .orElseThrow(() -> new IllegalArgumentException("계약을 찾을 수 없습니다."));
+
+        WeeklyAllowance newAllowance = WeeklyAllowance.builder()
+                .contract(contract)
+                .build();
+
+        return weeklyAllowanceRepository.save(newAllowance);
+    }
+
+    /**
+     * 특정 WeeklyAllowance의 수당을 재계산
+     * WorkRecord 추가/수정/삭제 후 호출
+     */
+    @Transactional
+    public WeeklyAllowance recalculateAllowances(Long weeklyAllowanceId) {
+        WeeklyAllowance allowance = weeklyAllowanceRepository.findById(weeklyAllowanceId)
+                .orElseThrow(() -> new IllegalArgumentException("주간 수당 정보를 찾을 수 없습니다."));
+
+        // 해당 WeeklyAllowance에 속한 모든 WorkRecord 조회
+        List<WorkRecord> workRecords = workRecordRepository.findAll().stream()
+                .filter(record -> allowance.getId().equals(record.getWeeklyAllowance() != null ? record.getWeeklyAllowance().getId() : null))
+                .toList();
+
+        allowance.calculateTotalWorkHours();
+        allowance.calculateWeeklyPaidLeave();
+        allowance.calculateOvertime();
+
+        return weeklyAllowanceRepository.save(allowance);
+    }
+
+    /**
+     * WeeklyAllowance 삭제
+     * WorkRecord가 모두 삭제되었을 때 호출
+     */
+    @Transactional
+    public void deleteWeeklyAllowance(Long weeklyAllowanceId) {
+        weeklyAllowanceRepository.deleteById(weeklyAllowanceId);
+    }
+}
