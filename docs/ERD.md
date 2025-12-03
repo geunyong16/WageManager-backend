@@ -14,6 +14,9 @@ erDiagram
 
     WorkerContract ||--o{ WorkRecord : "has"
     WorkerContract ||--o{ Salary : "generates"
+    WorkerContract ||--o{ WeeklyAllowance : "has"
+
+    WeeklyAllowance ||--o{ WorkRecord : "includes"
 
     WorkRecord ||--o{ CorrectionRequest : "can_request"
 
@@ -81,6 +84,7 @@ erDiagram
     WorkRecord {
         bigint id PK
         bigint contract_id FK "WorkerContract ID"
+        bigint weekly_allowance_id FK "WeeklyAllowance ID"
         date work_date "근무 날짜"
         time start_time "시작 시간"
         time end_time "종료 시간"
@@ -92,6 +96,17 @@ erDiagram
         enum status "STATUS(SCHEDULED, COMPLETED)"
         boolean is_modified "수정 여부"
         string memo "메모"
+        datetime created_at
+        datetime updated_at
+    }
+
+    WeeklyAllowance {
+        bigint id PK
+        bigint contract_id FK "WorkerContract ID"
+        decimal total_work_hours "주간 총 근무 시간"
+        decimal weekly_paid_leave_amount "주휴수당 금액"
+        decimal overtime_hours "연장근로 시간 (주 40시간 초과)"
+        decimal overtime_amount "연장수당 금액"
         datetime created_at
         datetime updated_at
     }
@@ -212,31 +227,43 @@ erDiagram
   - SCHEDULED: 예정 (근무 전)
   - COMPLETED: 완료 (근무 후)
 - **is_modified**: 수정 여부 (근무 전/후 상관없이 시간 변경 시 true)
+- **weekly_allowance_id**: 주간 수당 집계를 위한 WeeklyAllowance 참조
 
-### 7. CorrectionRequest (정정 요청)
+### 7. WeeklyAllowance (주간 수당)
+- 주 단위로 근무 기록을 집계하여 주휴수당 및 연장수당 계산
+- **total_work_hours**: 주간 총 근무 시간 (WorkRecord 합산)
+- **weekly_paid_leave_amount**: 주휴수당 금액
+  - 주 15시간 이상 근무 시 지급
+  - 계산식: (1주 소정근로 시간 / 40) × 8 × 시급
+- **overtime_hours**: 연장근로 시간 (주 40시간 초과 시)
+- **overtime_amount**: 연장수당 금액
+  - 계산식: 초과 시간 × 기본시급 × 1.5배율
+- WorkRecord와 1:N 관계로 해당 주의 모든 근무 기록을 참조
+
+### 8. CorrectionRequest (정정 요청)
 - 근로자가 근무 기록 수정을 요청
 - 고용주가 승인/반려 처리
 - **requested_work_date**: 수정 요청 날짜 추가
 - 화면에서 보이는 "시작 시간", "종료 시간", "사유" 필드 포함
 
-### 8. Salary (급여)
+### 9. Salary (급여)
 - 월별 급여 정산 내역
 - 기본급, 각종 수당, 4대 보험 및 세금 공제 포함
 - **total_work_hours**: 총 근무 시간
 - **four_major_insurance**: 4대 보험 통합 (국민연금+건강보험+고용보험+산재보험)
 - **local_income_tax**: 지방소득세
 
-### 9. Payment (송금)
+### 10. Payment (송금)
 - 급여 송금 내역 및 상태 관리
 - 카카오페이, 계좌이체 등 다양한 방식 지원
 - **상태**: PENDING(대기), COMPLETED(완료), FAILED(실패)
 
-### 10. Notification (알림)
+### 11. Notification (알림)
 - 사용자별 알림 내역
 - **CORRECTION_RESPONSE**: 정정 요청 응답 알림 타입 추가
 - 일정 변경, 정정 요청, 송금 등 다양한 이벤트
 
-### 11. UserSettings (사용자 설정)
+### 12. UserSettings (사용자 설정)
 - 사용자별 알림 설정 관리
 - 푸시, 이메일, SMS 알림 개별 설정
 - 알림 유형별 활성화/비활성화 설정
@@ -247,9 +274,10 @@ erDiagram
 2. **User → UserSettings**: 1:1 (사용자 설정)
 3. **Employer → Workplace**: 1:N (한 고용주가 여러 사업장 운영)
 4. **Workplace ↔ Worker → WorkerContract**: N:M (다대다 관계를 계약으로 해소)
-5. **WorkerContract → WorkRecord/Salary**: 1:N
-6. **WorkRecord → CorrectionRequest**: 1:N
-7. **Salary ↔ Payment**: 1:1
+5. **WorkerContract → WorkRecord/Salary/WeeklyAllowance**: 1:N
+6. **WeeklyAllowance → WorkRecord**: 1:N (주 단위 근무 기록 집계)
+7. **WorkRecord → CorrectionRequest**: 1:N
+8. **Salary ↔ Payment**: 1:1
 
 ## 화면 설계 반영 사항
 
@@ -275,6 +303,7 @@ erDiagram
 - Workplace: business_number (UK), employer_id, is_active
 - WorkerContract: workplace_id, worker_id, is_active
 - WorkRecord: contract_id, work_date, status (복합 인덱스: contract_id + work_date + status)
+- WeeklyAllowance: contract_id
 - CorrectionRequest: work_record_id, requester_id, status
 - Salary: contract_id, (year, month) composite index
 - Payment: salary_id, status

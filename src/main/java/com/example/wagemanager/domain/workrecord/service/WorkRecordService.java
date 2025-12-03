@@ -1,5 +1,7 @@
 package com.example.wagemanager.domain.workrecord.service;
 
+import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
+import com.example.wagemanager.domain.allowance.service.WeeklyAllowanceService;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
 import com.example.wagemanager.domain.contract.repository.WorkerContractRepository;
 import com.example.wagemanager.domain.worker.entity.Worker;
@@ -27,6 +29,7 @@ public class WorkRecordService {
     private final WorkRecordRepository workRecordRepository;
     private final WorkerContractRepository workerContractRepository;
     private final WorkerRepository workerRepository;
+    private final WeeklyAllowanceService weeklyAllowanceService;
 
     public List<WorkRecordDto.Response> getWorkRecordsByContract(Long contractId) {
         return workRecordRepository.findByContractId(contractId).stream()
@@ -72,6 +75,10 @@ public class WorkRecordService {
                 request.getBreakMinutes() != null ? request.getBreakMinutes() : 0
         );
 
+        // WorkRecord가 생성된 주에 WeeklyAllowance 자동 생성/조회
+        WeeklyAllowance weeklyAllowance = weeklyAllowanceService.getOrCreateWeeklyAllowanceForDate(
+                contract.getId(), request.getWorkDate());
+
         WorkRecord workRecord = WorkRecord.builder()
                 .contract(contract)
                 .workDate(request.getWorkDate())
@@ -81,9 +88,17 @@ public class WorkRecordService {
                 .totalWorkMinutes(totalMinutes)
                 .status(WorkRecordStatus.SCHEDULED)
                 .memo(request.getMemo())
+                .weeklyAllowance(weeklyAllowance)
                 .build();
 
         WorkRecord savedRecord = workRecordRepository.save(workRecord);
+
+        // 양방향 관계 동기화
+        savedRecord.addToWeeklyAllowance();
+
+        // WeeklyAllowance의 수당 재계산
+        weeklyAllowanceService.recalculateAllowances(weeklyAllowance.getId());
+
         return WorkRecordDto.Response.from(savedRecord);
     }
 
@@ -100,6 +115,10 @@ public class WorkRecordService {
 
         List<WorkRecord> workRecords = new ArrayList<>();
         for (LocalDate workDate : request.getWorkDates()) {
+            // 각 WorkRecord가 생성될 주에 WeeklyAllowance 자동 생성/조회
+            WeeklyAllowance weeklyAllowance = weeklyAllowanceService.getOrCreateWeeklyAllowanceForDate(
+                    contract.getId(), workDate);
+
             WorkRecord workRecord = WorkRecord.builder()
                     .contract(contract)
                     .workDate(workDate)
@@ -109,11 +128,22 @@ public class WorkRecordService {
                     .totalWorkMinutes(totalMinutes)
                     .status(WorkRecordStatus.SCHEDULED)
                     .memo(request.getMemo())
+                    .weeklyAllowance(weeklyAllowance)
                     .build();
             workRecords.add(workRecord);
         }
 
         List<WorkRecord> savedRecords = workRecordRepository.saveAll(workRecords);
+
+        // 양방향 관계 동기화
+        savedRecords.forEach(WorkRecord::addToWeeklyAllowance);
+
+        // 각 주의 WeeklyAllowance 수당 재계산
+        savedRecords.stream()
+                .map(WorkRecord::getWeeklyAllowance)
+                .distinct()
+                .forEach(allowance -> weeklyAllowanceService.recalculateAllowances(allowance.getId()));
+
         return savedRecords.stream()
                 .map(WorkRecordDto.Response::from)
                 .collect(Collectors.toList());
@@ -133,6 +163,23 @@ public class WorkRecordService {
                     request.getBreakMinutes() != null ? request.getBreakMinutes() : workRecord.getBreakMinutes()
             );
 
+            // 기존 WeeklyAllowance 저장 (나중에 재계산용)
+            WeeklyAllowance oldWeeklyAllowance = workRecord.getWeeklyAllowance();
+
+            // 기존 WeeklyAllowance에서 제거 (양방향 관계 해제)
+            if (oldWeeklyAllowance != null) {
+                workRecord.removeFromWeeklyAllowance();
+            }
+
+            // 현재 주에 맞는 WeeklyAllowance 조회/생성
+            WeeklyAllowance newWeeklyAllowance = weeklyAllowanceService.getOrCreateWeeklyAllowanceForDate(
+                    workRecord.getContract().getId(), workRecord.getWorkDate());
+
+            // 새로운 WeeklyAllowance에 할당 (양방향 관계 설정)
+            workRecord.assignToWeeklyAllowance(newWeeklyAllowance);
+            workRecord.addToWeeklyAllowance();
+
+            // WorkRecord 업데이트
             workRecord.updateWorkRecord(
                     request.getStartTime(),
                     request.getEndTime(),
@@ -140,6 +187,16 @@ public class WorkRecordService {
                     totalMinutes,
                     request.getMemo()
             );
+
+            workRecordRepository.save(workRecord);
+
+            // 기존 WeeklyAllowance 수당 재계산 (다른 WeeklyAllowance였다면)
+            if (oldWeeklyAllowance != null && !oldWeeklyAllowance.getId().equals(newWeeklyAllowance.getId())) {
+                weeklyAllowanceService.recalculateAllowances(oldWeeklyAllowance.getId());
+            }
+
+            // 새로운 WeeklyAllowance 수당 재계산
+            weeklyAllowanceService.recalculateAllowances(newWeeklyAllowance.getId());
         }
 
         return WorkRecordDto.Response.from(workRecord);
@@ -162,7 +219,24 @@ public class WorkRecordService {
             throw new IllegalStateException("예정된 근무만 삭제할 수 있습니다.");
         }
 
+        WeeklyAllowance weeklyAllowance = workRecord.getWeeklyAllowance();
+
+        // 양방향 관계 해제
+        workRecord.removeFromWeeklyAllowance();
+
         workRecordRepository.delete(workRecord);
+
+        // WeeklyAllowance가 비어있으면 삭제
+        if (weeklyAllowance != null) {
+            // 양방향 관계가 이미 해제되었으므로 컬렉션만 확인
+            if (weeklyAllowance.getWorkRecords().isEmpty()) {
+                // WorkRecord가 없으면 WeeklyAllowance 삭제
+                weeklyAllowanceService.deleteWeeklyAllowance(weeklyAllowance.getId());
+            } else {
+                // WorkRecord가 남아있으면 수당 재계산
+                weeklyAllowanceService.recalculateAllowances(weeklyAllowance.getId());
+            }
+        }
     }
 
     private int calculateWorkMinutes(LocalDateTime start, LocalDateTime end, int breakMinutes) {
