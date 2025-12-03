@@ -18,12 +18,14 @@ public interface WeeklyAllowanceRepository extends JpaRepository<WeeklyAllowance
     /**
      * 특정 날짜가 속한 주(월요일~일요일)의 WeeklyAllowance 조회
      * 같은 주에 이미 생성된 WeeklyAllowance가 있으면 반환
+     * WorkRecord의 workDate를 기준으로 주차를 계산
      */
     @Query("""
             SELECT wa FROM WeeklyAllowance wa
+            JOIN wa.workRecords wr
             WHERE wa.contract.id = :contractId
-            AND FUNCTION('YEAR', wa.createdAt) = FUNCTION('YEAR', :targetDate)
-            AND FUNCTION('WEEK', wa.createdAt) = FUNCTION('WEEK', :targetDate)
+            AND FUNCTION('YEAR', wr.workDate) = FUNCTION('YEAR', :targetDate)
+            AND FUNCTION('WEEK', wr.workDate) = FUNCTION('WEEK', :targetDate)
             """)
     List<WeeklyAllowance> findAllByContractAndWeek(@Param("contractId") Long contractId, @Param("targetDate") LocalDate targetDate);
 

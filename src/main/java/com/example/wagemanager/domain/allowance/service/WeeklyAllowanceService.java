@@ -4,8 +4,6 @@ import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
 import com.example.wagemanager.domain.allowance.repository.WeeklyAllowanceRepository;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
 import com.example.wagemanager.domain.contract.repository.WorkerContractRepository;
-import com.example.wagemanager.domain.workrecord.entity.WorkRecord;
-import com.example.wagemanager.domain.workrecord.repository.WorkRecordRepository;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,7 +19,6 @@ import java.util.Optional;
 public class WeeklyAllowanceService {
 
     private final WeeklyAllowanceRepository weeklyAllowanceRepository;
-    private final WorkRecordRepository workRecordRepository;
     private final WorkerContractRepository workerContractRepository;
 
     public List<WeeklyAllowance> getWeeklyAllowancesByContract(Long contractId) {
@@ -61,11 +58,6 @@ public class WeeklyAllowanceService {
     public WeeklyAllowance recalculateAllowances(Long weeklyAllowanceId) {
         WeeklyAllowance allowance = weeklyAllowanceRepository.findById(weeklyAllowanceId)
                 .orElseThrow(() -> new IllegalArgumentException("주간 수당 정보를 찾을 수 없습니다."));
-
-        // 해당 WeeklyAllowance에 속한 모든 WorkRecord 조회
-        List<WorkRecord> workRecords = workRecordRepository.findAll().stream()
-                .filter(record -> allowance.getId().equals(record.getWeeklyAllowance() != null ? record.getWeeklyAllowance().getId() : null))
-                .toList();
 
         allowance.calculateTotalWorkHours();
         allowance.calculateWeeklyPaidLeave();

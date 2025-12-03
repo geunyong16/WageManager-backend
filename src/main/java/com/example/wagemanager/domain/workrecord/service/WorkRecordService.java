@@ -93,6 +93,9 @@ public class WorkRecordService {
 
         WorkRecord savedRecord = workRecordRepository.save(workRecord);
 
+        // 양방향 관계 동기화
+        savedRecord.addToWeeklyAllowance();
+
         // WeeklyAllowance의 수당 재계산
         weeklyAllowanceService.recalculateAllowances(weeklyAllowance.getId());
 
@@ -132,6 +135,9 @@ public class WorkRecordService {
 
         List<WorkRecord> savedRecords = workRecordRepository.saveAll(workRecords);
 
+        // 양방향 관계 동기화
+        savedRecords.forEach(WorkRecord::addToWeeklyAllowance);
+
         // 각 주의 WeeklyAllowance 수당 재계산
         savedRecords.stream()
                 .map(WorkRecord::getWeeklyAllowance)
@@ -157,6 +163,23 @@ public class WorkRecordService {
                     request.getBreakMinutes() != null ? request.getBreakMinutes() : workRecord.getBreakMinutes()
             );
 
+            // 기존 WeeklyAllowance 저장 (나중에 재계산용)
+            WeeklyAllowance oldWeeklyAllowance = workRecord.getWeeklyAllowance();
+
+            // 기존 WeeklyAllowance에서 제거 (양방향 관계 해제)
+            if (oldWeeklyAllowance != null) {
+                workRecord.removeFromWeeklyAllowance();
+            }
+
+            // 현재 주에 맞는 WeeklyAllowance 조회/생성
+            WeeklyAllowance newWeeklyAllowance = weeklyAllowanceService.getOrCreateWeeklyAllowanceForDate(
+                    workRecord.getContract().getId(), workRecord.getWorkDate());
+
+            // 새로운 WeeklyAllowance에 할당 (양방향 관계 설정)
+            workRecord.assignToWeeklyAllowance(newWeeklyAllowance);
+            workRecord.addToWeeklyAllowance();
+
+            // WorkRecord 업데이트
             workRecord.updateWorkRecord(
                     request.getStartTime(),
                     request.getEndTime(),
@@ -165,15 +188,15 @@ public class WorkRecordService {
                     request.getMemo()
             );
 
-            // WeeklyAllowance가 없으면 생성하고, 있으면 수당 재계산
-            if (workRecord.getWeeklyAllowance() == null) {
-                WeeklyAllowance weeklyAllowance = weeklyAllowanceService.getOrCreateWeeklyAllowanceForDate(
-                        workRecord.getContract().getId(), workRecord.getWorkDate());
-                workRecord.setWeeklyAllowance(weeklyAllowance);
-                workRecordRepository.save(workRecord);
+            workRecordRepository.save(workRecord);
+
+            // 기존 WeeklyAllowance 수당 재계산 (다른 WeeklyAllowance였다면)
+            if (oldWeeklyAllowance != null && !oldWeeklyAllowance.getId().equals(newWeeklyAllowance.getId())) {
+                weeklyAllowanceService.recalculateAllowances(oldWeeklyAllowance.getId());
             }
 
-            weeklyAllowanceService.recalculateAllowances(workRecord.getWeeklyAllowance().getId());
+            // 새로운 WeeklyAllowance 수당 재계산
+            weeklyAllowanceService.recalculateAllowances(newWeeklyAllowance.getId());
         }
 
         return WorkRecordDto.Response.from(workRecord);
@@ -197,18 +220,17 @@ public class WorkRecordService {
         }
 
         WeeklyAllowance weeklyAllowance = workRecord.getWeeklyAllowance();
+
+        // 양방향 관계 해제
+        workRecord.removeFromWeeklyAllowance();
+
         workRecordRepository.delete(workRecord);
 
         // WeeklyAllowance가 비어있으면 삭제
         if (weeklyAllowance != null) {
-            // 남은 WorkRecord가 있는지 확인
-            List<WorkRecord> remainingRecords = workRecordRepository.findAll().stream()
-                    .filter(record -> weeklyAllowance.getId().equals(record.getWeeklyAllowance() != null ? record.getWeeklyAllowance().getId() : null))
-                    .toList();
-
-            if (remainingRecords.isEmpty()) {
+            // 양방향 관계가 이미 해제되었으므로 컬렉션만 확인
+            if (weeklyAllowance.getWorkRecords().isEmpty()) {
                 // WorkRecord가 없으면 WeeklyAllowance 삭제
-                weeklyAllowance.getWorkRecords().clear();
                 weeklyAllowanceService.deleteWeeklyAllowance(weeklyAllowance.getId());
             } else {
                 // WorkRecord가 남아있으면 수당 재계산

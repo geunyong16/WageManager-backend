@@ -37,9 +37,23 @@ public class WorkRecord extends BaseEntity {
     @Column(name = "work_date", nullable = false)
     private LocalDate workDate;
 
-    // WeeklyAllowance 설정
-    public void setWeeklyAllowance(WeeklyAllowance weeklyAllowance) {
+    // WeeklyAllowance 할당 (WeeklyAllowance 생성 시 사용)
+    public void assignToWeeklyAllowance(WeeklyAllowance weeklyAllowance) {
         this.weeklyAllowance = weeklyAllowance;
+    }
+
+    // WeeklyAllowance의 리스트에 WorkRecord 추가 (양방향 관계 동기화)
+    public void addToWeeklyAllowance() {
+        if (this.weeklyAllowance != null && !this.weeklyAllowance.getWorkRecords().contains(this)) {
+            this.weeklyAllowance.getWorkRecords().add(this);
+        }
+    }
+
+    // WeeklyAllowance의 리스트에서 WorkRecord 제거 (양방향 관계 동기화)
+    public void removeFromWeeklyAllowance() {
+        if (this.weeklyAllowance != null) {
+            this.weeklyAllowance.getWorkRecords().remove(this);
+        }
     }
 
     @Column(name = "start_time", nullable = false)

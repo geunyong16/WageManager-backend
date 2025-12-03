@@ -2,6 +2,7 @@ package com.example.wagemanager.domain.workrecord.repository;
 
 import com.example.wagemanager.domain.workrecord.entity.WorkRecord;
 import com.example.wagemanager.domain.workrecord.enums.WorkRecordStatus;
+import com.example.wagemanager.domain.contract.entity.WorkerContract;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -64,7 +65,7 @@ public interface WorkRecordRepository extends JpaRepository<WorkRecord, Long> {
     @Query("SELECT DISTINCT c FROM WorkerContract c " +
             "WHERE c.workplace.id = :workplaceId " +
             "AND c.isActive = true")
-    List<com.example.wagemanager.domain.contract.entity.WorkerContract> findContractsByWorkplaceId(
+    List<WorkerContract> findContractsByWorkplaceId(
             @Param("workplaceId") Long workplaceId
     );
 }
