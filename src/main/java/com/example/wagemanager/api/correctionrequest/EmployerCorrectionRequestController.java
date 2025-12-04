@@ -1,4 +1,4 @@
-package com.example.wagemanager.api.employer;
+package com.example.wagemanager.api.correctionrequest;
 
 import com.example.wagemanager.common.dto.ApiResponse;
 import com.example.wagemanager.domain.correction.dto.CorrectionRequestDto;

@@ -1,4 +1,4 @@
-package com.example.wagemanager.api.employer;
+package com.example.wagemanager.api.workrecord;
 
 import com.example.wagemanager.common.dto.ApiResponse;
 import com.example.wagemanager.domain.workrecord.dto.WorkRecordDto;
