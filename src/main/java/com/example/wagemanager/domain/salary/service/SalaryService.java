@@ -7,7 +7,7 @@ import com.example.wagemanager.domain.contract.repository.WorkerContractReposito
 import com.example.wagemanager.domain.salary.dto.SalaryDto;
 import com.example.wagemanager.domain.salary.entity.Salary;
 import com.example.wagemanager.domain.salary.repository.SalaryRepository;
-import com.example.wagemanager.domain.salary.util.TaxCalculator;
+import com.example.wagemanager.domain.salary.util.DeductionCalculator;
 import com.example.wagemanager.domain.workrecord.entity.WorkRecord;
 import com.example.wagemanager.domain.workrecord.repository.WorkRecordRepository;
 import lombok.RequiredArgsConstructor;
@@ -118,43 +118,26 @@ public class SalaryService {
             totalHolidayPay = totalHolidayPay.add(record.getHolidaySalary());
         }
 
-        // WeeklyAllowance에서 주휴수당과 연장수당 조회
-        List<WeeklyAllowance> weeklyAllowances = weeklyAllowanceRepository.findByContractId(contractId);
+        // WeeklyAllowance에서 주휴수당과 연장수당 조회 (년/월 기준 필터링)
+        List<WeeklyAllowance> weeklyAllowances = weeklyAllowanceRepository.findByContractIdAndYearMonth(contractId, year, month);
         BigDecimal totalWeeklyPaidLeaveAmount = BigDecimal.ZERO;
         BigDecimal totalOvertimePay = BigDecimal.ZERO;
 
         for (WeeklyAllowance allowance : weeklyAllowances) {
-            // 해당 월의 주간 수당만 포함 (allowance의 createdAt 기준)
-            LocalDate allowanceDate = allowance.getCreatedAt().toLocalDate();
-            if (allowanceDate.getYear() == year && allowanceDate.getMonthValue() == month) {
-                totalWeeklyPaidLeaveAmount = totalWeeklyPaidLeaveAmount.add(allowance.getWeeklyPaidLeaveAmount());
-                totalOvertimePay = totalOvertimePay.add(allowance.getOvertimeAmount());
-            }
+            totalWeeklyPaidLeaveAmount = totalWeeklyPaidLeaveAmount.add(allowance.getWeeklyPaidLeaveAmount());
+            totalOvertimePay = totalOvertimePay.add(allowance.getOvertimeAmount());
         }
 
         BigDecimal totalGrossPay = totalBasePay.add(totalNightPay).add(totalHolidayPay)
                 .add(totalWeeklyPaidLeaveAmount).add(totalOvertimePay);
 
-        // 세금 및 보험료 계산 (applyInsuranceAndTax 설정에 따라)
-        BigDecimal totalDeduction = BigDecimal.ZERO;
-        BigDecimal fourMajorInsurance = BigDecimal.ZERO;
-        BigDecimal incomeTax = BigDecimal.ZERO;
-        BigDecimal localIncomeTax = BigDecimal.ZERO;
+        // 세금 및 보험료 계산 (payrollDeductionType에 따라)
+        DeductionCalculator.TaxResult taxResult = DeductionCalculator.calculate(totalGrossPay, contract.getPayrollDeductionType());
 
-        if (contract.getApplyInsuranceAndTax()) {
-            // 4대보험 + 소득세 적용
-            TaxCalculator.PartTimeTax partTimeTax = TaxCalculator.calculatePartTimeTax(totalGrossPay, true);
-            fourMajorInsurance = partTimeTax.totalInsurance;
-            incomeTax = partTimeTax.incomeTax;
-            localIncomeTax = partTimeTax.localIncomeTax;
-            totalDeduction = partTimeTax.totalDeduction;
-        } else {
-            // 소득세만 적용 (3% + 0.3%)
-            TaxCalculator.FreelancerTax freelancerTax = TaxCalculator.calculateFreelancerTax(totalGrossPay);
-            incomeTax = freelancerTax.incomeTax;
-            localIncomeTax = freelancerTax.localIncomeTax;
-            totalDeduction = freelancerTax.totalTax;
-        }
+        BigDecimal fourMajorInsurance = taxResult.totalInsurance;
+        BigDecimal incomeTax = taxResult.incomeTax;
+        BigDecimal localIncomeTax = taxResult.localIncomeTax;
+        BigDecimal totalDeduction = taxResult.totalDeduction;
 
         BigDecimal netPay = totalGrossPay.subtract(totalDeduction);
 

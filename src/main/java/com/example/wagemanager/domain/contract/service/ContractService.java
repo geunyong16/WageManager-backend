@@ -54,6 +54,7 @@ public class ContractService {
                 .contractStartDate(request.getContractStartDate())
                 .contractEndDate(request.getContractEndDate())
                 .paymentDay(request.getPaymentDay())
+                .payrollDeductionType(request.getPayrollDeductionType())
                 .isActive(true)
                 .build();
 
@@ -87,7 +88,7 @@ public class ContractService {
                 workDaysJson,
                 request.getContractEndDate(),
                 request.getPaymentDay(),
-                request.getApplyInsuranceAndTax()
+                request.getPayrollDeductionType()
         );
 
         return ContractDto.Response.from(contract);

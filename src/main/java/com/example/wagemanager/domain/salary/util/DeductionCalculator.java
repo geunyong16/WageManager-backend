@@ -4,71 +4,71 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * 세금 및 보험료 계산 유틸리티
+ * 급여 공제 계산 유틸리티
  *
  * 대상자:
  * - 프리랜서: 소득세 3% + 지방소득세 0.3%
  * - 비정규직(알바): 세금/보험료 적용 여부에 따라 계산
  */
-public class TaxCalculator {
+public class DeductionCalculator {
 
     /**
-     * 프리랜서 세금 계산
-     * - 소득세: 3%
-     * - 지방소득세: 0.3%
+     * 급여 공제 유형
+     * 프리랜서와 비정규직의 세금 및 4대보험 공제 방식을 통합 관리
      */
-    public static class FreelancerTax {
-        public BigDecimal incomeTax;        // 소득세 3%
-        public BigDecimal localIncomeTax;   // 지방소득세 0.3%
-        public BigDecimal totalTax;         // 총 세금
-
-        public FreelancerTax(BigDecimal grossPay) {
-            this.incomeTax = grossPay.multiply(new BigDecimal("0.03"))
-                .setScale(0, RoundingMode.DOWN); // 원단위 절사
-            this.localIncomeTax = grossPay.multiply(new BigDecimal("0.003"))
-                .setScale(0, RoundingMode.DOWN); // 원단위 절사
-            this.totalTax = this.incomeTax.add(this.localIncomeTax);
-        }
-    }
-
-    /**
-     * 비정규직 세금/보험료 적용 유형
-     */
-    public enum PartTimeTaxType {
-        NONE,              // 세금 없음 + 4대보험 없음
-        INCOME_TAX_ONLY,   // 세금만 적용 + 4대보험 없음
-        INCOME_TAX_AND_INSURANCE  // 세금 + 4대보험 모두 적용
+    public enum PayrollDeductionType {
+        FREELANCER,                     // 프리랜서: 소득세 3% + 지방소득세 0.3%
+        PART_TIME_NONE,                 // 비정규직: 세금 X, 4대보험 X
+        PART_TIME_TAX_ONLY,             // 비정규직: 세금 O, 4대보험 X
+        PART_TIME_TAX_AND_INSURANCE     // 비정규직: 세금 O, 4대보험 O
     }
 
     // 최소 국민연금 보험료 기준 월급 (39만원)
     private static final BigDecimal MINIMUM_PENSION_WAGE = new BigDecimal("390000");
 
-    // 4대보험 요율 (비정규직)
+    // 4대보험 요율
     private static final BigDecimal NATIONAL_PENSION_RATE = new BigDecimal("0.045");     // 국민연금 4.5%
     private static final BigDecimal HEALTH_INSURANCE_RATE = new BigDecimal("0.03545");  // 건강보험 3.545%
     private static final BigDecimal LONG_TERM_CARE_RATE = new BigDecimal("0.1295");    // 장기요양보험 (건강보험의 12.95%)
     private static final BigDecimal EMPLOYMENT_INSURANCE_RATE = new BigDecimal("0.009"); // 고용보험 0.9%
 
     /**
-     * 비정규직 세금 및 보험료 계산
+     * 통합 세금 및 보험료 계산 결과
+     * 프리랜서와 비정규직 모두 사용 가능한 통합 결과 클래스
      */
-    public static class PartTimeTax {
-        public BigDecimal nationalPension;     // 국민연금 4.5% (최소 39만원 기준)
-        public BigDecimal healthInsurance;     // 건강보험 3.545%
+    public static class TaxResult {
+        public BigDecimal nationalPension;     // 국민연금
+        public BigDecimal healthInsurance;     // 건강보험
         public BigDecimal longTermCare;        // 장기요양보험
-        public BigDecimal employmentInsurance; // 고용보험 0.9%
+        public BigDecimal employmentInsurance; // 고용보험
         public BigDecimal totalInsurance;      // 총 보험료
 
-        public BigDecimal incomeTax;           // 소득세 (간이세액표 기준)
-        public BigDecimal localIncomeTax;      // 지방소득세 (소득세의 10%)
+        public BigDecimal incomeTax;           // 소득세
+        public BigDecimal localIncomeTax;      // 지방소득세
         public BigDecimal totalTax;            // 총 세금
 
         public BigDecimal totalDeduction;      // 총 공제 (보험료 + 세금)
 
-        public PartTimeTax(BigDecimal grossPay, PartTimeTaxType taxType) {
-            switch (taxType) {
-                case NONE:
-                    // 세금 없음 + 4대보험 없음
+        public TaxResult(BigDecimal grossPay, PayrollDeductionType deductionType) {
+            switch (deductionType) {
+                case FREELANCER:
+                    // 프리랜서: 소득세 3% + 지방소득세 0.3%
+                    this.nationalPension = BigDecimal.ZERO;
+                    this.healthInsurance = BigDecimal.ZERO;
+                    this.longTermCare = BigDecimal.ZERO;
+                    this.employmentInsurance = BigDecimal.ZERO;
+                    this.totalInsurance = BigDecimal.ZERO;
+
+                    this.incomeTax = grossPay.multiply(new BigDecimal("0.03"))
+                        .setScale(0, RoundingMode.DOWN);
+                    this.localIncomeTax = grossPay.multiply(new BigDecimal("0.003"))
+                        .setScale(0, RoundingMode.DOWN);
+                    this.totalTax = this.incomeTax.add(this.localIncomeTax);
+                    this.totalDeduction = this.totalTax;
+                    break;
+
+                case PART_TIME_NONE:
+                    // 비정규직: 세금 X, 4대보험 X
                     this.nationalPension = BigDecimal.ZERO;
                     this.healthInsurance = BigDecimal.ZERO;
                     this.longTermCare = BigDecimal.ZERO;
@@ -80,55 +80,44 @@ public class TaxCalculator {
                     this.totalDeduction = BigDecimal.ZERO;
                     break;
 
-                case INCOME_TAX_ONLY:
-                    // 세금만 적용 + 4대보험 없음
+                case PART_TIME_TAX_ONLY:
+                    // 비정규직: 세금 O, 4대보험 X
                     this.nationalPension = BigDecimal.ZERO;
                     this.healthInsurance = BigDecimal.ZERO;
                     this.longTermCare = BigDecimal.ZERO;
                     this.employmentInsurance = BigDecimal.ZERO;
                     this.totalInsurance = BigDecimal.ZERO;
 
-                    // 소득세 계산 (간이세액표 기준, 간단한 근사)
                     this.incomeTax = calculateSimpleIncomeTax(grossPay)
-                        .setScale(0, RoundingMode.DOWN); // 원단위 절사
+                        .setScale(0, RoundingMode.DOWN);
                     this.localIncomeTax = this.incomeTax.multiply(new BigDecimal("0.1"))
                         .setScale(0, RoundingMode.DOWN);
-
                     this.totalTax = this.incomeTax.add(this.localIncomeTax);
                     this.totalDeduction = this.totalTax;
                     break;
 
-                case INCOME_TAX_AND_INSURANCE:
-                    // 세금 + 4대보험 모두 적용
-                    // 보험료 계산
+                case PART_TIME_TAX_AND_INSURANCE:
+                    // 비정규직: 세금 O, 4대보험 O
                     BigDecimal pensionBaseSalary = grossPay.compareTo(MINIMUM_PENSION_WAGE) < 0
                         ? MINIMUM_PENSION_WAGE
                         : grossPay;
-
-                    // 국민연금 기준소득월액: 1천원 미만 절사
                     pensionBaseSalary = pensionBaseSalary.setScale(-3, RoundingMode.DOWN);
 
                     this.nationalPension = pensionBaseSalary.multiply(NATIONAL_PENSION_RATE)
-                        .setScale(0, RoundingMode.DOWN); // 원단위 절사
-
+                        .setScale(0, RoundingMode.DOWN);
                     this.healthInsurance = grossPay.multiply(HEALTH_INSURANCE_RATE)
                         .setScale(0, RoundingMode.DOWN);
-
                     this.longTermCare = this.healthInsurance.multiply(LONG_TERM_CARE_RATE)
                         .setScale(0, RoundingMode.DOWN);
-
                     this.employmentInsurance = grossPay.multiply(EMPLOYMENT_INSURANCE_RATE)
                         .setScale(0, RoundingMode.DOWN);
-
                     this.totalInsurance = this.nationalPension.add(this.healthInsurance)
                         .add(this.longTermCare).add(this.employmentInsurance);
 
-                    // 소득세 계산 (간이세액표 기준, 간단한 근사)
                     this.incomeTax = calculateSimpleIncomeTax(grossPay)
-                        .setScale(0, RoundingMode.DOWN); // 원단위 절사
+                        .setScale(0, RoundingMode.DOWN);
                     this.localIncomeTax = this.incomeTax.multiply(new BigDecimal("0.1"))
                         .setScale(0, RoundingMode.DOWN);
-
                     this.totalTax = this.incomeTax.add(this.localIncomeTax);
                     this.totalDeduction = this.totalInsurance.add(this.totalTax);
                     break;
@@ -137,29 +126,10 @@ public class TaxCalculator {
     }
 
     /**
-     * 프리랜서 세금 계산
+     * 통합 세금 및 보험료 계산
      */
-    public static FreelancerTax calculateFreelancerTax(BigDecimal grossPay) {
-        return new FreelancerTax(grossPay);
-    }
-
-    /**
-     * 비정규직 세금 및 보험료 계산
-     */
-    public static PartTimeTax calculatePartTimeTax(BigDecimal grossPay, PartTimeTaxType taxType) {
-        return new PartTimeTax(grossPay, taxType);
-    }
-
-    /**
-     * 비정규직 세금 및 보험료 계산 (하위 호환성 유지)
-     * @deprecated Use {@link #calculatePartTimeTax(BigDecimal, PartTimeTaxType)} instead
-     */
-    @Deprecated
-    public static PartTimeTax calculatePartTimeTax(BigDecimal grossPay, Boolean applyInsuranceAndTax) {
-        PartTimeTaxType taxType = applyInsuranceAndTax
-            ? PartTimeTaxType.INCOME_TAX_AND_INSURANCE
-            : PartTimeTaxType.NONE;
-        return new PartTimeTax(grossPay, taxType);
+    public static TaxResult calculate(BigDecimal grossPay, PayrollDeductionType deductionType) {
+        return new TaxResult(grossPay, deductionType);
     }
 
     /**

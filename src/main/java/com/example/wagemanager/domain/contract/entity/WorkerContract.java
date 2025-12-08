@@ -1,6 +1,7 @@
 package com.example.wagemanager.domain.contract.entity;
 
 import com.example.wagemanager.common.BaseEntity;
+import com.example.wagemanager.domain.salary.util.DeductionCalculator;
 import com.example.wagemanager.domain.workplace.entity.Workplace;
 import com.example.wagemanager.domain.worker.entity.Worker;
 import jakarta.persistence.*;
@@ -48,17 +49,18 @@ public class WorkerContract extends BaseEntity {
     @Builder.Default
     private Boolean isActive = true;
 
-    @Column(name = "apply_insurance_and_tax", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payroll_deduction_type", nullable = false)
     @Builder.Default
-    private Boolean applyInsuranceAndTax = false;
+    private DeductionCalculator.PayrollDeductionType payrollDeductionType = DeductionCalculator.PayrollDeductionType.PART_TIME_NONE;
 
     public void update(BigDecimal hourlyWage, String workDays, LocalDate contractEndDate, Integer paymentDay,
-                       Boolean applyInsuranceAndTax) {
+                       DeductionCalculator.PayrollDeductionType payrollDeductionType) {
         if (hourlyWage != null) this.hourlyWage = hourlyWage;
         if (workDays != null) this.workDays = workDays;
         if (contractEndDate != null) this.contractEndDate = contractEndDate;
         if (paymentDay != null) this.paymentDay = paymentDay;
-        if (applyInsuranceAndTax != null) this.applyInsuranceAndTax = applyInsuranceAndTax;
+        if (payrollDeductionType != null) this.payrollDeductionType = payrollDeductionType;
     }
 
     public void terminate() {

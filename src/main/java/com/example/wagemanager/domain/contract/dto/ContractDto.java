@@ -1,6 +1,7 @@
 package com.example.wagemanager.domain.contract.dto;
 
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
+import com.example.wagemanager.domain.salary.util.DeductionCalculator;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -41,8 +42,8 @@ public class ContractDto {
         @Max(value = 31, message = "급여 지급일은 31일 이하여야 합니다.")
         private Integer paymentDay;
 
-        @NotNull(message = "4대보험 적용 여부는 필수입니다.")
-        private Boolean applyInsuranceAndTax;
+        @NotNull(message = "급여 공제 유형은 필수입니다.")
+        private DeductionCalculator.PayrollDeductionType payrollDeductionType;
     }
 
     @Getter
@@ -63,8 +64,7 @@ public class ContractDto {
         @Max(value = 31, message = "급여 지급일은 31일 이하여야 합니다.")
         private Integer paymentDay;
 
-        @NotNull(message = "4대보험 적용 여부는 필수입니다.")
-        private Boolean applyInsuranceAndTax;
+        private DeductionCalculator.PayrollDeductionType payrollDeductionType;
     }
 
     @Getter
@@ -86,7 +86,7 @@ public class ContractDto {
         private LocalDate contractEndDate;
         private Integer paymentDay;
         private Boolean isActive;
-        private Boolean applyInsuranceAndTax;
+        private DeductionCalculator.PayrollDeductionType payrollDeductionType;
 
         public static Response from(WorkerContract contract) {
             return Response.builder()
@@ -103,7 +103,7 @@ public class ContractDto {
                     .contractEndDate(contract.getContractEndDate())
                     .paymentDay(contract.getPaymentDay())
                     .isActive(contract.getIsActive())
-                    .applyInsuranceAndTax(contract.getApplyInsuranceAndTax())
+                    .payrollDeductionType(contract.getPayrollDeductionType())
                     .build();
         }
     }
