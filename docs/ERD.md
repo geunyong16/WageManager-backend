@@ -252,11 +252,15 @@ erDiagram
 - **total_work_hours**: 총 근무 시간
 - **four_major_insurance**: 4대 보험 통합 (국민연금+건강보험+고용보험+산재보험)
 - **local_income_tax**: 지방소득세
+- **급여 공제 계산**: `DeductionCalculator` 클래스를 통해 자동 계산
+  - `PayrollDeductionType` enum으로 4가지 급여 공제 유형 지원
+  - 4대 보험 및 세금 자동 계산
 
 ### 10. Payment (송금)
 - 급여 송금 내역 및 상태 관리
 - 카카오페이, 계좌이체 등 다양한 방식 지원
 - **상태**: PENDING(대기), COMPLETED(완료), FAILED(실패)
+- **자동 실패 처리**: 매일 자정 스케줄러(`PaymentAutoFailScheduler`)가 실행되어 지급 예정일(payment_due_date)이 경과한 PENDING 상태의 결제를 자동으로 FAILED 처리
 
 ### 11. Notification (알림)
 - 사용자별 알림 내역
