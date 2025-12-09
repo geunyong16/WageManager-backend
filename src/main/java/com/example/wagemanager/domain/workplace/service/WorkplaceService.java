@@ -1,5 +1,7 @@
 package com.example.wagemanager.domain.workplace.service;
 
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.contract.repository.WorkerContractRepository;
 import com.example.wagemanager.domain.employer.entity.Employer;
 import com.example.wagemanager.domain.employer.service.EmployerService;
@@ -55,14 +57,14 @@ public class WorkplaceService {
 
     public WorkplaceDto.Response getWorkplaceById(Long workplaceId) {
         Workplace workplace = workplaceRepository.findById(workplaceId)
-                .orElseThrow(() -> new IllegalArgumentException("사업장을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORKPLACE_NOT_FOUND, "사업장을 찾을 수 없습니다."));
         return WorkplaceDto.Response.from(workplace);
     }
 
     @Transactional
     public WorkplaceDto.Response updateWorkplace(Long workplaceId, WorkplaceDto.UpdateRequest request) {
         Workplace workplace = workplaceRepository.findById(workplaceId)
-                .orElseThrow(() -> new IllegalArgumentException("사업장을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORKPLACE_NOT_FOUND, "사업장을 찾을 수 없습니다."));
 
         workplace.update(
                 request.getBusinessName(),
@@ -78,7 +80,7 @@ public class WorkplaceService {
     @Transactional
     public void deactivateWorkplace(Long workplaceId) {
         Workplace workplace = workplaceRepository.findById(workplaceId)
-                .orElseThrow(() -> new IllegalArgumentException("사업장을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORKPLACE_NOT_FOUND, "사업장을 찾을 수 없습니다."));
 
         workplace.deactivate();
     }

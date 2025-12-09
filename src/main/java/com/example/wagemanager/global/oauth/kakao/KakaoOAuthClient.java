@@ -1,5 +1,8 @@
 package com.example.wagemanager.global.oauth.kakao;
 
+import com.example.wagemanager.common.exception.BadRequestException;
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.UnauthorizedException;
 import com.example.wagemanager.global.oauth.kakao.dto.KakaoUserInfo;
 import com.example.wagemanager.global.oauth.kakao.dto.KakaoUserResponse;
 import lombok.RequiredArgsConstructor;
@@ -40,16 +43,16 @@ public class KakaoOAuthClient {
             );
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                throw new IllegalStateException("카카오 사용자 정보를 가져오지 못했습니다.");
+                throw new BadRequestException(ErrorCode.KAKAO_USER_INFO_FAILED, "카카오 사용자 정보를 가져오지 못했습니다.");
             }
 
             return response.getBody().toUserInfo();
         } catch (HttpStatusCodeException e) {
             log.error("Kakao API error response: {}", e.getResponseBodyAsString(), e);
-            throw new IllegalArgumentException("카카오 인증에 실패했습니다.");
+            throw new UnauthorizedException(ErrorCode.KAKAO_AUTH_FAILED, "카카오 인증에 실패했습니다.");
         } catch (RestClientException e) {
             log.error("Kakao API communication error", e);
-            throw new IllegalStateException("카카오 서버와 통신 중 오류가 발생했습니다.");
+            throw new BadRequestException(ErrorCode.KAKAO_SERVER_ERROR, "카카오 서버와 통신 중 오류가 발생했습니다.");
         }
     }
 }

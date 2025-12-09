@@ -1,6 +1,8 @@
 package com.example.wagemanager.api.auth;
 
 import com.example.wagemanager.common.dto.ApiResponse;
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.UnauthorizedException;
 import com.example.wagemanager.domain.auth.dto.AuthDto;
 import com.example.wagemanager.domain.auth.service.AuthService;
 import com.example.wagemanager.domain.user.entity.User;
@@ -119,7 +121,7 @@ public class AuthController {
                 }
             }
         }
-        throw new IllegalArgumentException("Refresh Token이 없습니다. 다시 로그인해주세요.");
+        throw new UnauthorizedException(ErrorCode.REFRESH_TOKEN_REQUIRED, "Refresh Token이 없습니다. 다시 로그인해주세요.");
     }
 
 }

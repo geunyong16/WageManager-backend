@@ -1,5 +1,8 @@
 package com.example.wagemanager.domain.contract.service;
 
+import com.example.wagemanager.common.exception.BadRequestException;
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.contract.dto.ContractDto;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
 import com.example.wagemanager.domain.contract.repository.WorkerContractRepository;
@@ -30,11 +33,11 @@ public class ContractService {
     public ContractDto.Response addWorkerToWorkplace(Long workplaceId, ContractDto.CreateRequest request) {
         // 사업장 조회
         Workplace workplace = workplaceRepository.findById(workplaceId)
-                .orElseThrow(() -> new IllegalArgumentException("사업장을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORKPLACE_NOT_FOUND, "사업장을 찾을 수 없습니다."));
 
         // Worker 코드로 근로자 조회
         Worker worker = workerRepository.findByWorkerCode(request.getWorkerCode())
-                .orElseThrow(() -> new IllegalArgumentException("근로자 코드를 찾을 수 없습니다: " + request.getWorkerCode()));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORKER_NOT_FOUND, "근로자 코드를 찾을 수 없습니다: " + request.getWorkerCode()));
 
         // 이미 계약이 존재하는지 확인 (활성 상태인 계약)
         List<WorkerContract> existingContracts = contractRepository.findByWorkplaceIdAndIsActive(workplaceId, true);
@@ -42,7 +45,7 @@ public class ContractService {
                 .anyMatch(contract -> contract.getWorker().getId().equals(worker.getId()));
 
         if (alreadyContracted) {
-            throw new IllegalArgumentException("이미 해당 사업장에 계약이 존재하는 근로자입니다.");
+            throw new BadRequestException(ErrorCode.DUPLICATE_CONTRACT, "이미 해당 사업장에 계약이 존재하는 근로자입니다.");
         }
 
         // 계약 생성
@@ -70,14 +73,14 @@ public class ContractService {
 
     public ContractDto.Response getContractById(Long contractId) {
         WorkerContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new IllegalArgumentException("계약을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
         return ContractDto.Response.from(contract);
     }
 
     @Transactional
     public ContractDto.Response updateContract(Long contractId, ContractDto.UpdateRequest request) {
         WorkerContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new IllegalArgumentException("계약을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
         String workDaysJson = request.getWorkDays() != null
                 ? convertWorkDaysToJson(request.getWorkDays())
@@ -97,7 +100,7 @@ public class ContractService {
     @Transactional
     public void terminateContract(Long contractId) {
         WorkerContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new IllegalArgumentException("계약을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
         contract.terminate();
     }
@@ -106,7 +109,7 @@ public class ContractService {
         try {
             return objectMapper.writeValueAsString(workDays);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("근무 요일 변환 중 오류가 발생했습니다.", e);
+            throw new BadRequestException(ErrorCode.WORK_DAY_CONVERSION_ERROR, "근무 요일 변환 중 오류가 발생했습니다.");
         }
     }
 }

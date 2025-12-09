@@ -1,6 +1,8 @@
 package com.example.wagemanager.api.user;
 
 import com.example.wagemanager.common.dto.ApiResponse;
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.UnauthorizedException;
 import com.example.wagemanager.domain.user.dto.UserDto;
 import com.example.wagemanager.domain.user.entity.User;
 import com.example.wagemanager.domain.user.enums.UserType;
@@ -69,7 +71,7 @@ public class UserController {
             @AuthenticationPrincipal User user,
             @RequestBody WorkerDto.UpdateRequest request) {
         if (user.getUserType() != UserType.WORKER) {
-            throw new IllegalArgumentException("근로자만 계좌 정보를 수정할 수 있습니다.");
+            throw new UnauthorizedException(ErrorCode.WORKER_ONLY, "근로자만 계좌 정보를 수정할 수 있습니다.");
         }
         return ApiResponse.success(workerService.updateWorkerByUserId(user.getId(), request));
     }

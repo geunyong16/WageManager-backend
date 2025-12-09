@@ -1,5 +1,8 @@
 package com.example.wagemanager.domain.workrecord.service;
 
+import com.example.wagemanager.common.exception.BadRequestException;
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
 import com.example.wagemanager.domain.allowance.service.WeeklyAllowanceService;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
@@ -39,7 +42,7 @@ public class WorkRecordService {
 
     public WorkRecordDto.DetailedResponse getWorkRecordById(Long workRecordId) {
         WorkRecord workRecord = workRecordRepository.findById(workRecordId)
-                .orElseThrow(() -> new IllegalArgumentException("근무 기록을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
         return WorkRecordDto.DetailedResponse.from(workRecord);
     }
 
@@ -56,7 +59,7 @@ public class WorkRecordService {
     public List<WorkRecordDto.DetailedResponse> getWorkRecordsByWorkerAndDateRange(
             Long userId, LocalDate startDate, LocalDate endDate) {
         Worker worker = workerRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("근로자 정보를 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORKER_NOT_FOUND, "근로자 정보를 찾을 수 없습니다."));
 
         List<WorkRecord> records = workRecordRepository.findByWorkerAndDateRange(worker.getId(), startDate, endDate);
         return records.stream()
@@ -67,7 +70,7 @@ public class WorkRecordService {
     @Transactional
     public WorkRecordDto.Response createWorkRecord(WorkRecordDto.CreateRequest request) {
         WorkerContract contract = workerContractRepository.findById(request.getContractId())
-                .orElseThrow(() -> new IllegalArgumentException("계약을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
         int totalMinutes = calculateWorkMinutes(
                 LocalDateTime.of(request.getWorkDate(), request.getStartTime()),
@@ -105,7 +108,7 @@ public class WorkRecordService {
     @Transactional
     public List<WorkRecordDto.Response> batchCreateWorkRecords(WorkRecordDto.BatchCreateRequest request) {
         WorkerContract contract = workerContractRepository.findById(request.getContractId())
-                .orElseThrow(() -> new IllegalArgumentException("계약을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
         int totalMinutes = calculateWorkMinutes(
                 LocalDateTime.of(LocalDate.now(), request.getStartTime()),
@@ -152,7 +155,7 @@ public class WorkRecordService {
     @Transactional
     public WorkRecordDto.Response updateWorkRecord(Long workRecordId, WorkRecordDto.UpdateRequest request) {
         WorkRecord workRecord = workRecordRepository.findById(workRecordId)
-                .orElseThrow(() -> new IllegalArgumentException("근무 기록을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
 
         if (request.getStartTime() != null || request.getEndTime() != null || request.getBreakMinutes() != null) {
             int totalMinutes = calculateWorkMinutes(
@@ -205,18 +208,18 @@ public class WorkRecordService {
     @Transactional
     public void completeWorkRecord(Long workRecordId) {
         WorkRecord workRecord = workRecordRepository.findById(workRecordId)
-                .orElseThrow(() -> new IllegalArgumentException("근무 기록을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
         workRecord.complete();
     }
 
     @Transactional
     public void deleteWorkRecord(Long workRecordId) {
         WorkRecord workRecord = workRecordRepository.findById(workRecordId)
-                .orElseThrow(() -> new IllegalArgumentException("근무 기록을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
 
         // SCHEDULED 상태만 삭제 가능
         if (workRecord.getStatus() != WorkRecordStatus.SCHEDULED) {
-            throw new IllegalStateException("예정된 근무만 삭제할 수 있습니다.");
+            throw new BadRequestException(ErrorCode.INVALID_WORK_RECORD_STATUS, "예정된 근무만 삭제할 수 있습니다.");
         }
 
         WeeklyAllowance weeklyAllowance = workRecord.getWeeklyAllowance();

@@ -1,5 +1,7 @@
 package com.example.wagemanager.domain.allowance.service;
 
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
 import com.example.wagemanager.domain.allowance.repository.WeeklyAllowanceRepository;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
@@ -41,7 +43,7 @@ public class WeeklyAllowanceService {
 
         // 없으면 새로 생성
         WorkerContract contract = workerContractRepository.findById(contractId)
-                .orElseThrow(() -> new IllegalArgumentException("계약을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
         WeeklyAllowance newAllowance = WeeklyAllowance.builder()
                 .contract(contract)
@@ -57,7 +59,7 @@ public class WeeklyAllowanceService {
     @Transactional
     public WeeklyAllowance recalculateAllowances(Long weeklyAllowanceId) {
         WeeklyAllowance allowance = weeklyAllowanceRepository.findById(weeklyAllowanceId)
-                .orElseThrow(() -> new IllegalArgumentException("주간 수당 정보를 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WEEKLY_ALLOWANCE_NOT_FOUND, "주간 수당 정보를 찾을 수 없습니다."));
 
         allowance.calculateTotalWorkHours();
         allowance.calculateWeeklyPaidLeave();

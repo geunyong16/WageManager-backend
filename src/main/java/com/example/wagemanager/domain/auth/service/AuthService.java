@@ -1,6 +1,9 @@
 package com.example.wagemanager.domain.auth.service;
 
+import com.example.wagemanager.common.exception.BadRequestException;
+import com.example.wagemanager.common.exception.ErrorCode;
 import com.example.wagemanager.common.exception.NotFoundException;
+import com.example.wagemanager.common.exception.UnauthorizedException;
 import com.example.wagemanager.domain.auth.dto.AuthDto;
 import com.example.wagemanager.domain.auth.entity.RefreshToken;
 import com.example.wagemanager.domain.auth.repository.RefreshTokenRepository;
@@ -57,17 +60,17 @@ public class AuthService {
     @Transactional
     public LoginResult loginWithKakao(String kakaoAccessToken) {
         if (!StringUtils.hasText(kakaoAccessToken)) {
-            throw new IllegalArgumentException("카카오 액세스 토큰은 필수입니다.");
+            throw new UnauthorizedException(ErrorCode.INVALID_ACCESS_TOKEN, "카카오 액세스 토큰은 필수입니다.");
         }
 
         KakaoUserInfo userInfo = kakaoOAuthClient.getUserInfo(kakaoAccessToken);
         if (!StringUtils.hasText(userInfo.kakaoId())) {
-            throw new IllegalArgumentException("카카오 사용자 식별자를 확인할 수 없습니다.");
+            throw new UnauthorizedException(ErrorCode.INVALID_KAKAO_ID, "카카오 사용자 식별자를 확인할 수 없습니다.");
         }
 
         User user = userRepository.findByKakaoId(userInfo.kakaoId())
                 .orElseThrow(() -> new NotFoundException(
-                        "USER_NOT_FOUND",
+                        ErrorCode.USER_NOT_FOUND,
                         "등록되지 않은 카카오 계정입니다. 회원가입을 진행해주세요."
                 ));
 
@@ -90,7 +93,7 @@ public class AuthService {
     @Transactional
     public void logout(Long userId) {
         if (userId == null) {
-            throw new IllegalArgumentException("로그인이 필요합니다.");
+            throw new UnauthorizedException(ErrorCode.LOGIN_REQUIRED, "로그인이 필요합니다.");
         }
         // Refresh Token 삭제
         refreshTokenRepository.deleteByUserId(userId);
@@ -102,27 +105,27 @@ public class AuthService {
     @Transactional
     public RefreshResult refreshAccessToken(String refreshTokenString) {
         if (!StringUtils.hasText(refreshTokenString)) {
-            throw new IllegalArgumentException("Refresh Token은 필수입니다.");
+            throw new UnauthorizedException(ErrorCode.REFRESH_TOKEN_REQUIRED, "Refresh Token은 필수입니다.");
         }
 
         // Refresh Token 검증
         if (!jwtTokenProvider.validateToken(refreshTokenString)) {
-            throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다.");
+            throw new UnauthorizedException(ErrorCode.INVALID_REFRESH_TOKEN, "유효하지 않은 Refresh Token입니다.");
         }
 
         // DB에서 Refresh Token 조회
         RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenString)
-                .orElseThrow(() -> new NotFoundException("REFRESH_TOKEN_NOT_FOUND", "Refresh Token을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.REFRESH_TOKEN_NOT_FOUND, "Refresh Token을 찾을 수 없습니다."));
 
         // 만료 확인
         if (refreshToken.isExpired()) {
             refreshTokenRepository.delete(refreshToken);
-            throw new IllegalArgumentException("만료된 Refresh Token입니다. 다시 로그인해주세요.");
+            throw new UnauthorizedException(ErrorCode.EXPIRED_REFRESH_TOKEN, "만료된 Refresh Token입니다. 다시 로그인해주세요.");
         }
 
         // 사용자 확인
         User user = userRepository.findById(refreshToken.getUserId())
-                .orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
 
         // 새로운 Access Token 및 Refresh Token 생성
         String newAccessToken = jwtTokenProvider.generateToken(user.getId());
@@ -169,23 +172,23 @@ public class AuthService {
     @Transactional
     public LoginResult registerWithKakao(AuthDto.KakaoRegisterRequest request) {
         if (!StringUtils.hasText(request.getKakaoAccessToken())) {
-            throw new IllegalArgumentException("카카오 액세스 토큰은 필수입니다.");
+            throw new UnauthorizedException(ErrorCode.INVALID_ACCESS_TOKEN, "카카오 액세스 토큰은 필수입니다.");
         }
 
         KakaoUserInfo userInfo = kakaoOAuthClient.getUserInfo(request.getKakaoAccessToken());
         if (!StringUtils.hasText(userInfo.kakaoId())) {
-            throw new IllegalArgumentException("카카오 사용자 식별자를 확인할 수 없습니다.");
+            throw new UnauthorizedException(ErrorCode.INVALID_KAKAO_ID, "카카오 사용자 식별자를 확인할 수 없습니다.");
         }
 
         if (userRepository.findByKakaoId(userInfo.kakaoId()).isPresent()) {
-            throw new IllegalArgumentException("이미 가입된 카카오 계정입니다.");
+            throw new BadRequestException(ErrorCode.DUPLICATE_KAKAO_ACCOUNT, "이미 가입된 카카오 계정입니다.");
         }
 
         UserType userType = parseUserType(request.getUserType());
 
         // WORKER 타입인 경우 카카오페이 링크 필수 검증
         if (userType == UserType.WORKER && !StringUtils.hasText(request.getKakaoPayLink())) {
-            throw new IllegalArgumentException("근로자 타입은 카카오페이 링크가 필수입니다.");
+            throw new BadRequestException(ErrorCode.KAKAOPAY_LINK_REQUIRED, "근로자 타입은 카카오페이 링크가 필수입니다.");
         }
 
         UserDto.RegisterRequest registerRequest = UserDto.RegisterRequest.builder()
@@ -220,14 +223,14 @@ public class AuthService {
         if (StringUtils.hasText(displayName)) {
             return displayName;
         }
-        throw new IllegalArgumentException("카카오 계정의 이름 정보를 확인할 수 없습니다.");
+        throw new BadRequestException(ErrorCode.KAKAO_NAME_NOT_FOUND, "카카오 계정의 이름 정보를 확인할 수 없습니다.");
     }
 
     private UserType parseUserType(String userType) {
         try {
             return UserType.valueOf(userType.toUpperCase());
         } catch (Exception e) {
-            throw new IllegalArgumentException("유효하지 않은 사용자 유형입니다. EMPLOYER 또는 WORKER를 입력해주세요.");
+            throw new BadRequestException(ErrorCode.INVALID_USER_TYPE, "유효하지 않은 사용자 유형입니다. EMPLOYER 또는 WORKER를 입력해주세요.");
         }
     }
 

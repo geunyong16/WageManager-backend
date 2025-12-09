@@ -1,5 +1,8 @@
 package com.example.wagemanager.domain.payment.service;
 
+import com.example.wagemanager.common.exception.BadRequestException;
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.payment.dto.PaymentDto;
 import com.example.wagemanager.domain.payment.entity.Payment;
 import com.example.wagemanager.domain.payment.enums.PaymentStatus;
@@ -35,11 +38,11 @@ public class PaymentService {
     public PaymentDto.Response processPayment(PaymentDto.PaymentRequest request) {
         // 급여 정보 조회
         Salary salary = salaryRepository.findById(request.getSalaryId())
-                .orElseThrow(() -> new IllegalArgumentException("급여 정보를 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.SALARY_NOT_FOUND, "급여 정보를 찾을 수 없습니다."));
 
         // 급여가 계산되었는지 확인
         if (salary.getNetPay() == null || salary.getNetPay().compareTo(java.math.BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("급여가 계산되지 않아 송금할 수 없습니다. 급여를 먼저 계산해주세요.");
+            throw new BadRequestException(ErrorCode.SALARY_NOT_CALCULATED, "급여가 계산되지 않아 송금할 수 없습니다. 급여를 먼저 계산해주세요.");
         }
 
         // 기존 Payment 레코드 확인
@@ -49,7 +52,7 @@ public class PaymentService {
         if (payment != null) {
             // 기존 Payment가 있으면 업데이트
             if (payment.getStatus() == PaymentStatus.COMPLETED) {
-                throw new IllegalStateException("이미 송금이 완료된 급여입니다.");
+                throw new BadRequestException(ErrorCode.PAYMENT_ALREADY_COMPLETED, "이미 송금이 완료된 급여입니다.");
             }
         } else {
             // 새로운 Payment 생성 (카카오페이 고정)
@@ -72,7 +75,7 @@ public class PaymentService {
      */
     public PaymentDto.Response getPaymentById(Long paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new IllegalArgumentException("송금 기록을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.PAYMENT_NOT_FOUND, "송금 기록을 찾을 수 없습니다."));
         return PaymentDto.Response.from(payment);
     }
 

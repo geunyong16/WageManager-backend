@@ -1,5 +1,9 @@
 package com.example.wagemanager.domain.correction.service;
 
+import com.example.wagemanager.common.exception.BadRequestException;
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.NotFoundException;
+import com.example.wagemanager.common.exception.UnauthorizedException;
 import com.example.wagemanager.domain.correction.dto.CorrectionRequestDto;
 import com.example.wagemanager.domain.correction.entity.CorrectionRequest;
 import com.example.wagemanager.domain.correction.enums.CorrectionStatus;
@@ -30,16 +34,16 @@ public class CorrectionRequestService {
     @Transactional
     public CorrectionRequestDto.Response createCorrectionRequest(User requester, CorrectionRequestDto.CreateRequest request) {
         WorkRecord workRecord = workRecordRepository.findById(request.getWorkRecordId())
-                .orElseThrow(() -> new IllegalArgumentException("근무 기록을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
 
         // 해당 근무기록에 이미 대기중인 정정요청이 있는지 확인
         if (correctionRequestRepository.existsByWorkRecordIdAndStatus(request.getWorkRecordId(), CorrectionStatus.PENDING)) {
-            throw new IllegalStateException("해당 근무 기록에 이미 대기중인 정정요청이 있습니다.");
+            throw new BadRequestException(ErrorCode.DUPLICATE_CORRECTION_REQUEST, "해당 근무 기록에 이미 대기중인 정정요청이 있습니다.");
         }
 
         // 본인의 근무기록인지 확인
         if (!workRecord.getContract().getWorker().getUser().getId().equals(requester.getId())) {
-            throw new IllegalArgumentException("본인의 근무 기록에 대해서만 정정요청을 할 수 있습니다.");
+            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED_ACCESS, "본인의 근무 기록에 대해서만 정정요청을 할 수 있습니다.");
         }
 
         CorrectionRequest correctionRequest = CorrectionRequest.builder()
@@ -82,11 +86,11 @@ public class CorrectionRequestService {
      */
     public CorrectionRequestDto.Response getMyCorrectionRequest(User requester, Long correctionRequestId) {
         CorrectionRequest correctionRequest = correctionRequestRepository.findByIdWithDetails(correctionRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("정정요청을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CORRECTION_REQUEST_NOT_FOUND, "정정요청을 찾을 수 없습니다."));
 
         // 본인의 정정요청인지 확인
         if (!correctionRequest.getRequester().getId().equals(requester.getId())) {
-            throw new IllegalArgumentException("본인의 정정요청만 조회할 수 있습니다.");
+            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED_ACCESS, "본인의 정정요청만 조회할 수 있습니다.");
         }
 
         return CorrectionRequestDto.Response.from(correctionRequest);
@@ -98,16 +102,16 @@ public class CorrectionRequestService {
     @Transactional
     public void cancelCorrectionRequest(User requester, Long correctionRequestId) {
         CorrectionRequest correctionRequest = correctionRequestRepository.findById(correctionRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("정정요청을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CORRECTION_REQUEST_NOT_FOUND, "정정요청을 찾을 수 없습니다."));
 
         // 본인의 정정요청인지 확인
         if (!correctionRequest.getRequester().getId().equals(requester.getId())) {
-            throw new IllegalArgumentException("본인의 정정요청만 취소할 수 있습니다.");
+            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED_ACCESS, "본인의 정정요청만 취소할 수 있습니다.");
         }
 
         // PENDING 상태만 취소 가능
         if (correctionRequest.getStatus() != CorrectionStatus.PENDING) {
-            throw new IllegalStateException("대기중인 정정요청만 취소할 수 있습니다.");
+            throw new BadRequestException(ErrorCode.INVALID_CORRECTION_STATUS, "대기중인 정정요청만 취소할 수 있습니다.");
         }
 
         correctionRequestRepository.delete(correctionRequest);
@@ -136,7 +140,7 @@ public class CorrectionRequestService {
      */
     public CorrectionRequestDto.Response getCorrectionRequestDetail(Long correctionRequestId) {
         CorrectionRequest correctionRequest = correctionRequestRepository.findByIdWithDetails(correctionRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("정정요청을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CORRECTION_REQUEST_NOT_FOUND, "정정요청을 찾을 수 없습니다."));
 
         return CorrectionRequestDto.Response.from(correctionRequest);
     }
@@ -147,11 +151,11 @@ public class CorrectionRequestService {
     @Transactional
     public CorrectionRequestDto.Response approveCorrectionRequest(User reviewer, Long correctionRequestId, CorrectionRequestDto.ReviewRequest request) {
         CorrectionRequest correctionRequest = correctionRequestRepository.findByIdWithDetails(correctionRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("정정요청을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CORRECTION_REQUEST_NOT_FOUND, "정정요청을 찾을 수 없습니다."));
 
         // PENDING 상태만 승인 가능
         if (correctionRequest.getStatus() != CorrectionStatus.PENDING) {
-            throw new IllegalStateException("대기중인 정정요청만 승인할 수 있습니다.");
+            throw new BadRequestException(ErrorCode.INVALID_CORRECTION_STATUS, "대기중인 정정요청만 승인할 수 있습니다.");
         }
 
         correctionRequest.approve(reviewer, request.getReviewComment());
@@ -165,11 +169,11 @@ public class CorrectionRequestService {
     @Transactional
     public CorrectionRequestDto.Response rejectCorrectionRequest(User reviewer, Long correctionRequestId, CorrectionRequestDto.ReviewRequest request) {
         CorrectionRequest correctionRequest = correctionRequestRepository.findByIdWithDetails(correctionRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("정정요청을 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CORRECTION_REQUEST_NOT_FOUND, "정정요청을 찾을 수 없습니다."));
 
         // PENDING 상태만 거절 가능
         if (correctionRequest.getStatus() != CorrectionStatus.PENDING) {
-            throw new IllegalStateException("대기중인 정정요청만 거절할 수 있습니다.");
+            throw new BadRequestException(ErrorCode.INVALID_CORRECTION_STATUS, "대기중인 정정요청만 거절할 수 있습니다.");
         }
 
         correctionRequest.reject(reviewer, request.getReviewComment());

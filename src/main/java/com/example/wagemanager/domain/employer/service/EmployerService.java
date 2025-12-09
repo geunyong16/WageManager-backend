@@ -1,5 +1,7 @@
 package com.example.wagemanager.domain.employer.service;
 
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.employer.entity.Employer;
 import com.example.wagemanager.domain.employer.repository.EmployerRepository;
 import com.example.wagemanager.domain.user.entity.User;
@@ -26,6 +28,6 @@ public class EmployerService {
 
     public Employer getEmployerByUserId(Long userId) {
         return employerRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("고용주 정보를 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.EMPLOYER_NOT_FOUND, "고용주 정보를 찾을 수 없습니다."));
     }
 }

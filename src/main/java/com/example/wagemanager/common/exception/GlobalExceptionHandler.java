@@ -18,6 +18,20 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(e.getErrorCode(), e.getErrorMessage());
     }
 
+    @ExceptionHandler(UnauthorizedException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiResponse<Void> handleUnauthorizedException(UnauthorizedException e) {
+        log.error("UnauthorizedException: {}", e.getErrorMessage());
+        return ApiResponse.error(e.getErrorCode(), e.getErrorMessage());
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleBadRequestException(BadRequestException e) {
+        log.error("BadRequestException: {}", e.getErrorMessage());
+        return ApiResponse.error(e.getErrorCode(), e.getErrorMessage());
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleIllegalArgumentException(IllegalArgumentException e) {

@@ -1,5 +1,7 @@
 package com.example.wagemanager.domain.salary.service;
 
+import com.example.wagemanager.common.exception.ErrorCode;
+import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
 import com.example.wagemanager.domain.allowance.repository.WeeklyAllowanceRepository;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
@@ -34,7 +36,7 @@ public class SalaryService {
      */
     public SalaryDto.Response getSalaryById(Long salaryId) {
         Salary salary = salaryRepository.findById(salaryId)
-                .orElseThrow(() -> new IllegalArgumentException("급여 정보를 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.SALARY_NOT_FOUND, "급여 정보를 찾을 수 없습니다."));
         return SalaryDto.Response.from(salary);
     }
 
@@ -89,7 +91,7 @@ public class SalaryService {
     @Transactional
     public SalaryDto.Response calculateSalaryByWorkRecords(Long contractId, Integer year, Integer month) {
         WorkerContract contract = workerContractRepository.findById(contractId)
-                .orElseThrow(() -> new IllegalArgumentException("계약 정보를 찾을 수 없습니다."));
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
         // 월급날 기준으로 급여 계산 기간 설정
         // 예: 월급날이 21일이면, 전월 21일 ~ 당월 20일까지
@@ -102,7 +104,7 @@ public class SalaryService {
 
         // 기간 내 WorkRecord가 없으면 Salary 생성하지 않음
         if (workRecords.isEmpty()) {
-            throw new IllegalArgumentException("해당 기간 내 근무 기록이 없습니다.");
+            throw new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "해당 기간 내 근무 기록이 없습니다.");
         }
 
         // WorkRecord의 이미 계산된 급여 칼럼값 합산
