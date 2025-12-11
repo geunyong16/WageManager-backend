@@ -11,7 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,8 +47,14 @@ public class WeeklyAllowanceService {
         WorkerContract contract = workerContractRepository.findById(contractId)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
+        // 해당 날짜가 속한 주의 시작일(월요일)과 종료일(일요일) 계산
+        LocalDate weekStart = workDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate weekEnd = workDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+
         WeeklyAllowance newAllowance = WeeklyAllowance.builder()
                 .contract(contract)
+                .weekStartDate(weekStart)
+                .weekEndDate(weekEnd)
                 .build();
 
         return weeklyAllowanceRepository.save(newAllowance);

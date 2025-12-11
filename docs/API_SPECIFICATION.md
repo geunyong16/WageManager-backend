@@ -62,8 +62,8 @@
 | 11.5 | 전체 읽음 | PUT | `/api/notifications/read-all` | 모든 알림 읽음 | 대기 | 대기 | - | [링크](#115-전체-읽음) |
 | 11.6 | 알림 삭제 | DELETE | `/api/notifications/{id}` | 알림 삭제 | 대기 | 대기 | - | [링크](#116-알림-삭제) |
 | **12. 공통 - 설정** ||||||||
-| 12.1 | 설정 조회 | GET | `/api/settings` | 사용자 설정 조회 | 대기 | 대기 | - | [링크](#121-설정-조회) |
-| 12.2 | 설정 수정 | PUT | `/api/settings` | 사용자 설정 수정 | 대기 | 대기 | - | [링크](#122-설정-수정) |
+| 12.1 | 내 설정 조회 | GET | `/api/settings/me` | 로그인한 사용자의 알림 설정 조회 | 대기 | 완료 | 2025-12-10 | [링크](#121-내-설정-조회) |
+| 12.2 | 내 설정 수정 | PUT | `/api/settings/me` | 로그인한 사용자의 알림 설정 수정 | 대기 | 완료 | 2025-12-10 | [링크](#122-내-설정-수정) |
 
 ---
 
@@ -122,32 +122,67 @@
 ### 5.1 일정 등록
 **Request:** `{"contract_id": 1, "work_date": "2025-11-01", "start_time": "09:00", "end_time": "14:00"}` → **Response:** `{"success": true, "data": {"id": 1, "status": "SCHEDULED", "is_modified": false}}`
 
-### 5.2 일정 일괄등록
-**Request:** `{"contract_id": 1, "work_records": [{...}, {...}]}` → **Response:** `{"success": true, "data": {"created_count": 20}}`
+**중요:** 근무 기록 생성 시 자동 상태 결정
+- **과거 날짜**: `COMPLETED` 상태로 자동 생성 → 즉시 급여에 반영 ✅
+- **미래/당일 날짜**: `SCHEDULED` 상태로 생성 → 급여에 반영 안 됨
+- 고용주가 생성 시 근로자에게 알람 전송 (TODO)
+
+**급여 재계산 트리거:**
+- `COMPLETED` 상태로 생성된 경우 자동으로 해당 월 급여 재계산
+- 근로자에게 알람 전송 (TODO)
+
+### 5.2 일정 일괄등록 (초기 설정용)
+**Request:** `{"contract_id": 1, "work_dates": ["2025-11-01", "2025-11-02", ...], "start_time": "09:00", "end_time": "14:00"}` → **Response:** `{"success": true, "data": {"created_count": 20}}`
+
+**용도:** 계약 초기에 근무 스케줄 등록 시 **최초 2개월치** 근무 일정을 일괄 생성
+- 이후 근무 일정은 스케줄러가 자동 생성
+- 과거/미래 날짜 모두 생성 가능 (상태 자동 결정)
 
 ### 5.3 근무기록 조회
-**Query:** `?workplace_id=1&year=2025&month=11` → **Response:** `{"success": true, "data": [{"id": 1, "status": "COMPLETED", "is_modified": false, ...}]}`
+**Query:** `?workplace_id=1&start_date=2025-11-01&end_date=2025-11-30` → **Response:** `{"success": true, "data": [{"id": 1, "status": "COMPLETED", "is_modified": false, ...}]}`
+
+**응답 필드 설명:**
+- `status`: `SCHEDULED` (예정) 또는 `COMPLETED` (완료)
+- `is_modified`: 수정 여부
+- `total_hours`: 총 근무 시간
 
 ### 5.4 일정 수정
 **Request:** `{"start_time": "10:00", "end_time": "15:00"}` → **Response:** `{"success": true, "data": {"is_modified": true}}`
 
+**급여 재계산:**
+- `COMPLETED` 상태의 근무 기록 수정 시 자동으로 해당 월 급여 재계산 ✅
+- `SCHEDULED` 상태 수정 시 급여 재계산 안 됨
+
 ### 5.5 근무 완료
 **Response:** `{"success": true, "data": {"id": 1, "status": "COMPLETED", "total_hours": 5.0}}`
 
+**급여 재계산:**
+- `SCHEDULED` → `COMPLETED` 상태 변경 시 자동으로 해당 월 급여 재계산 ✅
+- 이 시점에 비로소 급여에 포함됨 (중요!)
+
 ### 5.6 일정 삭제
 **Response:** `{"success": true, "message": "근무 일정이 삭제되었습니다."}`
+
+**제약사항:**
+- `SCHEDULED` 상태만 삭제 가능
+- `COMPLETED` 상태는 삭제 불가 (정정 요청 사용)
+- 삭제 시 급여에 영향 없음 (예정 일정이므로)
 
 ### 6.1 요청 목록
 **Response:** `{"success": true, "data": [{"id": 1, "requester": {"name": "김민지"}, "status": "PENDING", ...}]}`
 
 ### 6.2 요청 상세
-**Response:** `{"success": true, "data": {"id": 1, "requested_end_time": "14:30", "reason": "...", ...}}`
+**Response:** `{"success": true, "data": {"id": 1, "requested_end_time": "14:30", ...}}`
 
 ### 6.3 요청 승인
-**Request:** `{"review_comment": "확인했습니다"}` → **Response:** `{"success": true, "data": {"status": "APPROVED"}}`
+**Response:** `{"success": true, "data": {"status": "APPROVED"}}`
+
+**참고:** 승인 시 추가적인 요청 본문(Request Body) 없이 승인 처리됩니다. 승인 시각은 `reviewed_at` 필드에 자동으로 기록됩니다.
 
 ### 6.4 요청 반려
-**Request:** `{"review_comment": "..."}` → **Response:** `{"success": true, "data": {"status": "REJECTED"}}`
+**Response:** `{"success": true, "data": {"status": "REJECTED"}}`
+
+**참고:** 반려 시 추가적인 요청 본문(Request Body) 없이 반려 처리됩니다. 반려 시각은 `reviewed_at` 필드에 자동으로 기록됩니다.
 
 ### 7.1 급여 목록
 **Query:** `?workplace_id=1&year=2025&month=11` → **Response:** `{"success": true, "data": [{"salary_id": 1, "net_pay": 1008000, ...}]}`
@@ -158,11 +193,17 @@
 ### 7.3 급여 계산
 **Request:** `{"contract_id": 1, "year": 2025, "month": 11}` → **Response:** `{"success": true, "data": {"salary_id": 1, "net_pay": 1008000}}`
 
+**계산 정책:** 📘 자세한 내용은 [급여 정산 정책 문서](./SALARY_CALCULATION_POLICY.md) 참조
+1. **계산 기간**: 전월 월급날 ~ 당월 월급날 전일 (예: 15일 월급 → 전월 15일 ~ 당월 14일)
+2. **포함 근무**: `COMPLETED` 상태의 근무 기록만 집계
+3. **주휴수당/연장수당 이월**: 마지막 주차(월급날 포함 주)의 주휴수당/연장수당은 다음 달로 이월 ⚠️
+4. **자동 재계산**: 근무 완료/수정 시 자동으로 재계산됨
+
 ### 7.4 급여 송금
 **Request:** `{"salary_id": 1, "payment_method": "KAKAO_PAY"}` → **Response:** `{"success": true, "data": {"payment_id": 1, "status": "COMPLETED"}}`
 
 ### 8.1 일정 조회
-**Query:** `?year=2025&month=11` → **Response:** `{"success": true, "data": [{"id": 1, "status": "COMPLETED", "is_modified": false, ...}]}`
+**Query:** `?start_date=2025-11-01&end_date=2025-11-30` → **Response:** `{"success": true, "data": [{"id": 1, "status": "COMPLETED", "is_modified": false, ...}]}`
 
 ### 8.2 기록 상세
 **Response:** `{"success": true, "data": {"id": 1, "total_hours": 5.0, "status": "COMPLETED", ...}}`
@@ -170,14 +211,23 @@
 ### 8.3 근무 완료
 **Response:** `{"success": true, "data": {"id": 1, "status": "COMPLETED"}}`
 
+**참고:** 근로자도 자신의 근무를 완료 처리할 수 있으며, 이 경우 자동으로 급여에 반영됩니다.
+
 ### 9.1 요청 생성
-**Request:** `{"work_record_id": 1, "requested_end_time": "14:30", "reason": "..."}` → **Response:** `{"success": true, "data": {"id": 1, "status": "PENDING"}}`
+**Request:** `{"work_record_id": 1, "requested_work_date": "2025-11-01", "requested_start_time": "09:00", "requested_end_time": "14:30"}` → **Response:** `{"success": true, "data": {"id": 1, "status": "PENDING"}}`
+
+**참고:** 정정 요청 생성 시 요청 근무일, 시작 시간, 종료 시간을 입력합니다. 원본 근무 시간은 자동으로 저장됩니다.
 
 ### 9.2 내 요청 목록
 **Response:** `{"success": true, "data": [{"id": 1, "status": "PENDING", ...}]}`
 
 ### 9.3 요청 상세
-**Response:** `{"success": true, "data": {"id": 1, "work_record_id": 1, "requested_end_time": "14:30", "reason": "손님이 많아서 30분 연장 근무했습니다", "status": "PENDING", ...}}`
+**Response:** `{"success": true, "data": {"id": 1, "work_record_id": 1, "original_start_time": "09:00", "original_end_time": "14:00", "requested_work_date": "2025-11-01", "requested_start_time": "09:00", "requested_end_time": "14:30", "status": "PENDING", "reviewed_at": null, ...}}`
+
+**응답 필드:**
+- `original_*`: 정정 요청 생성 시점의 원본 근무 시간
+- `requested_*`: 요청한 근무 시간
+- `reviewed_at`: 승인/반려 처리 시각 (처리 전에는 null)
 
 ### 9.4 요청 취소
 **Response:** `{"success": true, "message": "정정 요청이 취소되었습니다."}`
@@ -217,11 +267,58 @@
 ### 11.6 알림 삭제
 **Response:** `{"success": true, "message": "알림이 삭제되었습니다."}`
 
-### 12.1 설정 조회
-**Response:** `{"success": true, "data": {"notification_enabled": true, "push_enabled": true, ...}}`
+### 12.1 내 설정 조회
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 1,
+    "notificationEnabled": true,
+    "pushEnabled": true,
+    "emailEnabled": false,
+    "smsEnabled": false,
+    "scheduleChangeAlertEnabled": true,
+    "paymentAlertEnabled": true,
+    "correctionRequestAlertEnabled": true
+  }
+}
+```
+- 설정이 없는 경우 자동으로 기본 설정이 생성됩니다.
 
-### 12.2 설정 수정
-**Request:** `{"notification_enabled": true, "push_enabled": false, ...}` → **Response:** `{"success": true}`
+### 12.2 내 설정 수정
+**Request:**
+```json
+{
+  "notificationEnabled": true,
+  "pushEnabled": false,
+  "emailEnabled": true,
+  "smsEnabled": false,
+  "scheduleChangeAlertEnabled": true,
+  "paymentAlertEnabled": true,
+  "correctionRequestAlertEnabled": false
+}
+```
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 1,
+    "notificationEnabled": true,
+    "pushEnabled": false,
+    "emailEnabled": true,
+    "smsEnabled": false,
+    "scheduleChangeAlertEnabled": true,
+    "paymentAlertEnabled": true,
+    "correctionRequestAlertEnabled": false
+  }
+}
+```
+- null 값은 무시되며, 제공된 필드만 업데이트됩니다.
+- 설정이 없는 경우 자동으로 기본 설정이 생성됩니다.
 
 ---
 
@@ -243,3 +340,5 @@
 - v1.1 (2025-11-01): 하나의 통합 표로 정리, is_modified 필드 반영
 - v1.2 (2025-11-06): 근로자용 정정 요청 상세 조회 API 추가 (9.3)
 - v1.3 (2025-12-09): 회원가입 API 제거 (카카오 로그인에서 자동 처리), 카카오 로그인 설명 보강
+- v1.4 (2025-12-10): 사용자 설정 API 구현 완료 (12.1-12.2), 알림 설정 관리 기능 추가
+- v1.5 (2025-12-11): 정정 요청 API 간소화 - reviewComment와 reason 필드 제거, 승인/반려 시 요청 본문 불필요, UserSettings 회원가입 시 자동 생성

@@ -10,6 +10,8 @@ import com.example.wagemanager.domain.worker.entity.Worker;
 import com.example.wagemanager.domain.worker.repository.WorkerRepository;
 import com.example.wagemanager.domain.workplace.entity.Workplace;
 import com.example.wagemanager.domain.workplace.repository.WorkplaceRepository;
+import com.example.wagemanager.domain.workrecord.service.WorkRecordGenerationService;
+import com.example.wagemanager.domain.contract.dto.WorkScheduleDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ public class ContractService {
     private final WorkerContractRepository contractRepository;
     private final WorkplaceRepository workplaceRepository;
     private final WorkerRepository workerRepository;
+    private final WorkRecordGenerationService workRecordGenerationService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -53,7 +56,7 @@ public class ContractService {
                 .workplace(workplace)
                 .worker(worker)
                 .hourlyWage(request.getHourlyWage())
-                .workDays(convertWorkDaysToJson(request.getWorkDays()))
+                .workSchedules(convertWorkSchedulesToJson(request.getWorkSchedules()))
                 .contractStartDate(request.getContractStartDate())
                 .contractEndDate(request.getContractEndDate())
                 .paymentDay(request.getPaymentDay())
@@ -61,12 +64,28 @@ public class ContractService {
                 .isActive(true)
                 .build();
 
-        return ContractDto.Response.from(contractRepository.save(contract));
+        WorkerContract savedContract = contractRepository.save(contract);
+
+        // 2개월치 WorkRecord 자동 생성
+        workRecordGenerationService.generateInitialWorkRecords(savedContract);
+
+        return ContractDto.Response.from(savedContract);
     }
 
     public List<ContractDto.ListResponse> getContractsByWorkplaceId(Long workplaceId) {
         List<WorkerContract> contracts = contractRepository.findByWorkplaceIdAndIsActive(workplaceId, true);
         return contracts.stream()
+                .map(ContractDto.ListResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    public List<ContractDto.ListResponse> getContractsByUserId(Long userId) {
+        Worker worker = workerRepository.findByUserId(userId)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORKER_NOT_FOUND, "근로자 정보를 찾을 수 없습니다."));
+
+        List<WorkerContract> contracts = contractRepository.findByWorkerId(worker.getId());
+        return contracts.stream()
+                .filter(contract -> contract.getIsActive())
                 .map(ContractDto.ListResponse::from)
                 .collect(Collectors.toList());
     }
@@ -82,13 +101,13 @@ public class ContractService {
         WorkerContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
-        String workDaysJson = request.getWorkDays() != null
-                ? convertWorkDaysToJson(request.getWorkDays())
+        String workSchedulesJson = request.getWorkSchedules() != null
+                ? convertWorkSchedulesToJson(request.getWorkSchedules())
                 : null;
 
         contract.update(
                 request.getHourlyWage(),
-                workDaysJson,
+                workSchedulesJson,
                 request.getContractEndDate(),
                 request.getPaymentDay(),
                 request.getPayrollDeductionType()
@@ -105,11 +124,11 @@ public class ContractService {
         contract.terminate();
     }
 
-    private String convertWorkDaysToJson(List<Integer> workDays) {
+    private String convertWorkSchedulesToJson(List<WorkScheduleDto> workSchedules) {
         try {
-            return objectMapper.writeValueAsString(workDays);
+            return objectMapper.writeValueAsString(workSchedules);
         } catch (JsonProcessingException e) {
-            throw new BadRequestException(ErrorCode.WORK_DAY_CONVERSION_ERROR, "근무 요일 변환 중 오류가 발생했습니다.");
+            throw new BadRequestException(ErrorCode.WORK_DAY_CONVERSION_ERROR, "근무 스케줄 변환 중 오류가 발생했습니다.");
         }
     }
 }

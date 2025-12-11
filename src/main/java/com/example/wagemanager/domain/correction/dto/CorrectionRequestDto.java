@@ -21,25 +21,17 @@ public class CorrectionRequestDto {
     @AllArgsConstructor
     @Schema(name = "CorrectionRequestCreateRequest")
     public static class CreateRequest {
-        @NotNull
+        @NotNull(message = "근무 기록 ID는 필수입니다.")
         private Long workRecordId;
-        @NotNull
-        private LocalDate requestedWorkDate;
-        @NotNull
-        private LocalTime requestedStartTime;
-        @NotNull
-        private LocalTime requestedEndTime;
-        @NotNull
-        private String reason;
-    }
 
-    @Getter
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Schema(name = "CorrectionRequestReviewRequest")
-    public static class ReviewRequest {
-        private String reviewComment;
+        @NotNull(message = "요청 근무일은 필수입니다.")
+        private LocalDate requestedWorkDate;
+
+        @NotNull(message = "요청 시작 시간은 필수입니다.")
+        private LocalTime requestedStartTime;
+
+        @NotNull(message = "요청 종료 시간은 필수입니다.")
+        private LocalTime requestedEndTime;
     }
 
     @Getter
@@ -56,16 +48,13 @@ public class CorrectionRequestDto {
         private LocalDate requestedWorkDate;
         private LocalTime requestedStartTime;
         private LocalTime requestedEndTime;
-        private String reason;
         private CorrectionStatus status;
         private RequesterInfo requester;
-        private ReviewerInfo reviewer;
         private LocalDateTime reviewedAt;
-        private String reviewComment;
         private LocalDateTime createdAt;
 
         public static Response from(CorrectionRequest request) {
-            ResponseBuilder builder = Response.builder()
+            return Response.builder()
                     .id(request.getId())
                     .workRecordId(request.getWorkRecord().getId())
                     // Entity에 저장된 원본 시간 사용 (approve 후에도 변경되지 않음)
@@ -75,24 +64,14 @@ public class CorrectionRequestDto {
                     .requestedWorkDate(request.getRequestedWorkDate())
                     .requestedStartTime(request.getRequestedStartTime())
                     .requestedEndTime(request.getRequestedEndTime())
-                    .reason(request.getReason())
                     .status(request.getStatus())
                     .requester(RequesterInfo.builder()
                             .id(request.getRequester().getId())
                             .name(request.getRequester().getName())
                             .build())
                     .reviewedAt(request.getReviewedAt())
-                    .reviewComment(request.getReviewComment())
-                    .createdAt(request.getCreatedAt());
-
-            if (request.getReviewer() != null) {
-                builder.reviewer(ReviewerInfo.builder()
-                        .id(request.getReviewer().getId())
-                        .name(request.getReviewer().getName())
-                        .build());
-            }
-
-            return builder.build();
+                    .createdAt(request.getCreatedAt())
+                    .build();
         }
     }
 
@@ -109,7 +88,6 @@ public class CorrectionRequestDto {
         private LocalTime originalEndTime;
         private LocalTime requestedStartTime;
         private LocalTime requestedEndTime;
-        private String reason;
         private CorrectionStatus status;
         private RequesterInfo requester;
         private String workplaceName;
@@ -125,7 +103,6 @@ public class CorrectionRequestDto {
                     .originalEndTime(request.getOriginalEndTime())
                     .requestedStartTime(request.getRequestedStartTime())
                     .requestedEndTime(request.getRequestedEndTime())
-                    .reason(request.getReason())
                     .status(request.getStatus())
                     .requester(RequesterInfo.builder()
                             .id(request.getRequester().getId())
@@ -143,16 +120,6 @@ public class CorrectionRequestDto {
     @AllArgsConstructor
     @Schema(name = "CorrectionRequestRequesterInfo")
     public static class RequesterInfo {
-        private Long id;
-        private String name;
-    }
-
-    @Getter
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Schema(name = "CorrectionRequestReviewerInfo")
-    public static class ReviewerInfo {
         private Long id;
         private String name;
     }

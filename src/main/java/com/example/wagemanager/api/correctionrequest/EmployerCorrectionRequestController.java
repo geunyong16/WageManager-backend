@@ -4,13 +4,11 @@ import com.example.wagemanager.common.dto.ApiResponse;
 import com.example.wagemanager.domain.correction.dto.CorrectionRequestDto;
 import com.example.wagemanager.domain.correction.enums.CorrectionStatus;
 import com.example.wagemanager.domain.correction.service.CorrectionRequestService;
-import com.example.wagemanager.domain.user.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,23 +43,17 @@ public class EmployerCorrectionRequestController {
     @PreAuthorize("@correctionRequestPermission.canAccessAsEmployer(#id)")
     @PutMapping("/correction-requests/{id}/approve")
     public ApiResponse<CorrectionRequestDto.Response> approveCorrectionRequest(
-            @AuthenticationPrincipal User user,
-            @Parameter(description = "정정요청 ID", required = true) @PathVariable Long id,
-            @RequestBody(required = false) CorrectionRequestDto.ReviewRequest request) {
-        CorrectionRequestDto.ReviewRequest reviewRequest = request != null ? request : new CorrectionRequestDto.ReviewRequest();
+            @Parameter(description = "정정요청 ID", required = true) @PathVariable Long id) {
         return ApiResponse.success(
-                correctionRequestService.approveCorrectionRequest(user, id, reviewRequest));
+                correctionRequestService.approveCorrectionRequest(id));
     }
 
     @Operation(summary = "정정요청 거절", description = "근로자의 정정요청을 거절합니다.")
     @PreAuthorize("@correctionRequestPermission.canAccessAsEmployer(#id)")
     @PutMapping("/correction-requests/{id}/reject")
     public ApiResponse<CorrectionRequestDto.Response> rejectCorrectionRequest(
-            @AuthenticationPrincipal User user,
-            @Parameter(description = "정정요청 ID", required = true) @PathVariable Long id,
-            @RequestBody(required = false) CorrectionRequestDto.ReviewRequest request) {
-        CorrectionRequestDto.ReviewRequest reviewRequest = request != null ? request : new CorrectionRequestDto.ReviewRequest();
+            @Parameter(description = "정정요청 ID", required = true) @PathVariable Long id) {
         return ApiResponse.success(
-                correctionRequestService.rejectCorrectionRequest(user, id, reviewRequest));
+                correctionRequestService.rejectCorrectionRequest(id));
     }
 }

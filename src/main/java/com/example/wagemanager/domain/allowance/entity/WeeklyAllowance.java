@@ -7,6 +7,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,6 +35,18 @@ public class WeeklyAllowance extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "contract_id", nullable = false)
     private WorkerContract contract;
+
+    /**
+     * 해당 주의 시작일 (월요일)
+     */
+    @Column(name = "week_start_date", nullable = false)
+    private LocalDate weekStartDate;
+
+    /**
+     * 해당 주의 종료일 (일요일)
+     */
+    @Column(name = "week_end_date", nullable = false)
+    private LocalDate weekEndDate;
 
     // 해당 주의 근무 기록들
     @OneToMany(mappedBy = "weeklyAllowance", fetch = FetchType.LAZY)

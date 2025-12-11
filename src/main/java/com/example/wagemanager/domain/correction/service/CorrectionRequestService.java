@@ -57,7 +57,6 @@ public class CorrectionRequestService {
                 .requestedWorkDate(request.getRequestedWorkDate())
                 .requestedStartTime(request.getRequestedStartTime())
                 .requestedEndTime(request.getRequestedEndTime())
-                .reason(request.getReason())
                 .status(CorrectionStatus.PENDING)
                 .build();
 
@@ -149,7 +148,7 @@ public class CorrectionRequestService {
      * 정정요청 승인
      */
     @Transactional
-    public CorrectionRequestDto.Response approveCorrectionRequest(User reviewer, Long correctionRequestId, CorrectionRequestDto.ReviewRequest request) {
+    public CorrectionRequestDto.Response approveCorrectionRequest(Long correctionRequestId) {
         CorrectionRequest correctionRequest = correctionRequestRepository.findByIdWithDetails(correctionRequestId)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.CORRECTION_REQUEST_NOT_FOUND, "정정요청을 찾을 수 없습니다."));
 
@@ -158,7 +157,7 @@ public class CorrectionRequestService {
             throw new BadRequestException(ErrorCode.INVALID_CORRECTION_STATUS, "대기중인 정정요청만 승인할 수 있습니다.");
         }
 
-        correctionRequest.approve(reviewer, request.getReviewComment());
+        correctionRequest.approve();
 
         return CorrectionRequestDto.Response.from(correctionRequest);
     }
@@ -167,7 +166,7 @@ public class CorrectionRequestService {
      * 정정요청 거절
      */
     @Transactional
-    public CorrectionRequestDto.Response rejectCorrectionRequest(User reviewer, Long correctionRequestId, CorrectionRequestDto.ReviewRequest request) {
+    public CorrectionRequestDto.Response rejectCorrectionRequest(Long correctionRequestId) {
         CorrectionRequest correctionRequest = correctionRequestRepository.findByIdWithDetails(correctionRequestId)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.CORRECTION_REQUEST_NOT_FOUND, "정정요청을 찾을 수 없습니다."));
 
@@ -176,7 +175,7 @@ public class CorrectionRequestService {
             throw new BadRequestException(ErrorCode.INVALID_CORRECTION_STATUS, "대기중인 정정요청만 거절할 수 있습니다.");
         }
 
-        correctionRequest.reject(reviewer, request.getReviewComment());
+        correctionRequest.reject();
 
         return CorrectionRequestDto.Response.from(correctionRequest);
     }

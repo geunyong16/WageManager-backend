@@ -68,4 +68,9 @@ public interface WorkRecordRepository extends JpaRepository<WorkRecord, Long> {
     List<WorkerContract> findContractsByWorkplaceId(
             @Param("workplaceId") Long workplaceId
     );
+
+    boolean existsByContractAndWorkDate(WorkerContract contract, LocalDate workDate);
+
+    @Query("SELECT c FROM WorkerContract c WHERE c.isActive = true")
+    List<WorkerContract> findAllActiveContracts();
 }

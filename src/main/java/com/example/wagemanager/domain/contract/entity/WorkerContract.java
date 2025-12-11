@@ -33,8 +33,8 @@ public class WorkerContract extends BaseEntity {
     @Column(name = "hourly_wage", nullable = false, precision = 10, scale = 2)
     private BigDecimal hourlyWage;
 
-    @Column(name = "work_days", nullable = false, columnDefinition = "JSON")
-    private String workDays; // JSON: [1,2,3,4,5,6,7]
+    @Column(name = "work_schedules", nullable = false, columnDefinition = "JSON")
+    private String workSchedules; // JSON: [{"dayOfWeek": 1, "startTime": "09:00", "endTime": "18:00"}, ...]
 
     @Column(name = "contract_start_date", nullable = false)
     private LocalDate contractStartDate;
@@ -54,10 +54,10 @@ public class WorkerContract extends BaseEntity {
     @Builder.Default
     private DeductionCalculator.PayrollDeductionType payrollDeductionType = DeductionCalculator.PayrollDeductionType.PART_TIME_NONE;
 
-    public void update(BigDecimal hourlyWage, String workDays, LocalDate contractEndDate, Integer paymentDay,
+    public void update(BigDecimal hourlyWage, String workSchedules, LocalDate contractEndDate, Integer paymentDay,
                        DeductionCalculator.PayrollDeductionType payrollDeductionType) {
         if (hourlyWage != null) this.hourlyWage = hourlyWage;
-        if (workDays != null) this.workDays = workDays;
+        if (workSchedules != null) this.workSchedules = workSchedules;
         if (contractEndDate != null) this.contractEndDate = contractEndDate;
         if (paymentDay != null) this.paymentDay = paymentDay;
         if (payrollDeductionType != null) this.payrollDeductionType = payrollDeductionType;

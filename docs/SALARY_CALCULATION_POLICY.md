@@ -1,0 +1,312 @@
+# 급여 정산 정책 (Salary Calculation Policy)
+
+## 📋 개요
+
+본 문서는 WageManager의 급여 정산 시스템에 대한 상세한 정책과 계산 로직을 설명합니다.
+
+## 🗓️ 급여 계산 기간
+
+### 기본 원칙
+- **월급날(Payment Day)** 기준으로 급여 계산 기간이 결정됩니다.
+- 예: 월급날이 매월 15일인 경우
+  - **1월 급여**: 전년 12월 15일 ~ 1월 14일까지의 근무
+  - **2월 급여**: 1월 15일 ~ 2월 14일까지의 근무
+
+### 코드 예시
+```java
+// 월급날이 21일인 경우
+Integer paymentDay = 21;
+LocalDate startDate = LocalDate.of(year, month, 1).minusMonths(1).withDayOfMonth(paymentDay);
+LocalDate endDate = LocalDate.of(year, month, 1).withDayOfMonth(paymentDay).minusDays(1);
+// 예: 2024년 2월 급여 → 2024-01-21 ~ 2024-02-20
+```
+
+## 🏢 근무 기록 (WorkRecord) 관리
+
+### 근무 기록 상태 (WorkRecordStatus)
+
+#### 1. SCHEDULED (예정)
+- 미래 날짜의 근무 일정
+- **급여 계산에 포함되지 않음**
+
+#### 2. COMPLETED (완료)
+- 과거 날짜에 생성되거나 명시적으로 완료 처리된 근무
+- **급여 계산에 포함됨**
+
+### 자동 상태 결정
+근무 기록 생성 시 날짜를 비교하여 자동으로 상태가 결정됩니다:
+
+```java
+WorkRecordStatus status = workDate.isBefore(LocalDate.now())
+    ? WorkRecordStatus.COMPLETED
+    : WorkRecordStatus.SCHEDULED;
+```
+
+- **과거 날짜**: 자동으로 COMPLETED → 즉시 급여에 반영
+- **미래 날짜**: SCHEDULED → 급여에 반영 안 됨
+- **당일**: SCHEDULED → 수동으로 완료 처리 필요
+
+## 💰 급여 구성 요소
+
+### 1. 기본급 (Base Pay)
+```
+기본급 = 총 근무 시간 × 시급
+```
+- COMPLETED 상태의 근무 기록만 집계
+- 야간/공휴일 할증 제외
+
+### 2. 야간 수당 (Night Pay)
+```
+야간 수당 = 야간 근무 시간 × 시급 × 0.5 (50% 할증)
+```
+- 22:00 ~ 06:00 시간대 근무에 적용
+
+### 3. 공휴일 수당 (Holiday Pay)
+```
+공휴일 수당 = 공휴일 근무 시간 × 시급 × 0.5 (50% 할증)
+```
+
+### 4. 주휴수당 (Weekly Paid Leave)
+
+#### 지급 조건
+- **주 15시간 이상** 근무 시 지급
+
+#### 계산 공식
+```
+주휴수당 = (주 소정근로시간 ÷ 40) × 8 × 시급
+```
+
+#### 예시
+- 주 20시간 근무, 시급 10,000원인 경우:
+  ```
+  주휴수당 = (20 ÷ 40) × 8 × 10,000 = 40,000원
+  ```
+
+### 5. 연장수당 (Overtime Pay)
+
+#### 지급 조건
+- **주 40시간 초과** 근무 시 지급
+
+#### 계산 공식
+```
+연장수당 = 초과 시간 × 시급 × 1.5 (50% 할증)
+```
+
+#### 예시
+- 주 45시간 근무, 시급 10,000원인 경우:
+  ```
+  초과 시간 = 45 - 40 = 5시간
+  연장수당 = 5 × 10,000 × 1.5 = 75,000원
+  ```
+
+## 🔄 마지막 주차 수당 이월 정책
+
+### ⚠️ 중요: 이월 원칙
+
+**마지막 주차**(월급날이 포함된 주)의 **주휴수당과 연장수당**은 **다음 달 급여로 이월**됩니다.
+
+### 이월 이유
+- 주휴수당/연장수당은 **주 단위로 계산**됨
+- 월급날이 주 중간에 있으면, 해당 주가 완전히 끝나지 않은 상태
+- 주가 완전히 끝난 후(다음 주 월요일 시작) 정확한 계산 가능
+
+### 마지막 주차 판단 기준
+
+```java
+// 마지막 주차 판단: 월급날이 해당 주(weekStartDate ~ weekEndDate)에 포함되는지 확인
+boolean isLastWeek = !paymentDayDate.isBefore(allowance.getWeekStartDate())
+                  && !paymentDayDate.isAfter(allowance.getWeekEndDate());
+```
+
+### 구체적인 예시
+
+#### 예시 1: 월급날이 수요일인 경우
+```
+월급날: 2024년 1월 15일 (수요일)
+
+[1월 8일(월) ~ 1월 14일(일)] 주:
+  - 주휴수당: 1월 급여에 포함 ✅
+  - 연장수당: 1월 급여에 포함 ✅
+
+[1월 15일(월) ~ 1월 21일(일)] 주:  ⚠️ 마지막 주차
+  - 월급날(1월 15일)이 이 주에 포함됨
+  - 주휴수당: 2월 급여로 이월 ⏭️
+  - 연장수당: 2월 급여로 이월 ⏭️
+
+[1월 22일(월) ~ 1월 28일(일)] 주:
+  - 주휴수당: 2월 급여에 포함 ✅
+  - 연장수당: 2월 급여에 포함 ✅
+```
+
+#### 예시 2: 월급날이 월요일인 경우
+```
+월급날: 2024년 2월 5일 (월요일)
+
+[2월 5일(월) ~ 2월 11일(일)] 주:  ⚠️ 마지막 주차
+  - 월급날(2월 5일)이 이 주의 첫날
+  - 주휴수당: 3월 급여로 이월 ⏭️
+  - 연장수당: 3월 급여로 이월 ⏭️
+```
+
+### 이월 처리 로직
+
+```java
+// 1. 당월 WeeklyAllowance 처리 - 마지막 주차 제외
+for (WeeklyAllowance allowance : weeklyAllowances) {
+    boolean isLastWeek = !paymentDayDate.isBefore(allowance.getWeekStartDate())
+                      && !paymentDayDate.isAfter(allowance.getWeekEndDate());
+
+    if (!isLastWeek) {
+        // 마지막 주차가 아니면 현재 월 급여에 포함
+        totalWeeklyPaidLeaveAmount += allowance.getWeeklyPaidLeaveAmount();
+        totalOvertimePay += allowance.getOvertimeAmount();
+    }
+}
+
+// 2. 전월에서 이월된 수당 포함
+LocalDate previousPaymentDayDate = paymentDayDate.minusMonths(1);
+for (WeeklyAllowance allowance : previousMonthAllowances) {
+    boolean isPreviousLastWeek = !previousPaymentDayDate.isBefore(allowance.getWeekStartDate())
+                              && !previousPaymentDayDate.isAfter(allowance.getWeekEndDate());
+
+    if (isPreviousLastWeek) {
+        // 전월 마지막 주차의 수당을 현재 월 급여에 추가
+        totalWeeklyPaidLeaveAmount += allowance.getWeeklyPaidLeaveAmount();
+        totalOvertimePay += allowance.getOvertimeAmount();
+    }
+}
+```
+
+## 🧮 총 급여 계산
+
+### 1. 총 지급액 (Gross Pay)
+```
+총 지급액 = 기본급 + 야간수당 + 공휴일수당 + 주휴수당 + 연장수당
+```
+
+### 2. 공제액 (Deductions)
+- 4대 보험 (국민연금, 건강보험, 고용보험, 산재보험)
+- 소득세
+- 지방소득세
+
+### 3. 실수령액 (Net Pay)
+```
+실수령액 = 총 지급액 - 총 공제액
+```
+
+## 📊 급여 계산 시점
+
+### 자동 재계산 트리거
+
+1. **근무 완료 처리 시** (SCHEDULED → COMPLETED)
+   ```java
+   workRecord.complete();
+   coordinatorService.handleWorkRecordCompletion(workRecord);
+   ```
+
+2. **COMPLETED 상태의 근무 기록 수정 시**
+   ```java
+   if (workRecord.getStatus() == WorkRecordStatus.COMPLETED) {
+       recalculateSalaryForWorkRecord(workRecord);
+   }
+   ```
+
+3. **과거 날짜로 근무 기록 생성 시**
+   ```java
+   if (status == WorkRecordStatus.COMPLETED) {
+       coordinatorService.handleWorkRecordCompletion(savedRecord);
+   }
+   ```
+
+### 재계산되지 않는 경우
+
+1. **SCHEDULED 상태 근무 기록 생성/수정 시**
+   - 예정된 근무는 급여에 영향 없음
+
+2. **SCHEDULED 상태 근무 기록 삭제 시**
+   - 예정된 근무 삭제는 급여에 영향 없음
+
+## 🔍 주의사항
+
+### 1. WeeklyAllowance 생성 시점
+- 근무 기록이 생성될 때 자동으로 해당 주차의 WeeklyAllowance도 생성됩니다.
+- 주차는 **월요일~일요일** 기준으로 계산됩니다.
+
+### 2. 급여 계산 정확도
+- 모든 금액은 `BigDecimal`을 사용하여 정확한 계산을 보장합니다.
+- 반올림은 `RoundingMode.HALF_UP` 방식을 사용합니다.
+
+### 3. 월급날 설정
+- 계약(Contract) 생성 시 `paymentDay` 필드에 설정됩니다.
+- 1~28일 사이의 값을 권장합니다 (29, 30, 31일은 월에 따라 문제 발생 가능).
+
+### 4. 데이터 정합성
+- WorkRecord는 반드시 WeeklyAllowance와 연결되어야 합니다.
+- WeeklyAllowance는 반드시 Contract와 연결되어야 합니다.
+- Salary는 반드시 Contract와 연결되어야 합니다.
+
+## 📝 API 호출 예시
+
+### 급여 계산 API
+```http
+POST /api/salary/calculate
+Content-Type: application/json
+
+{
+  "contractId": 1,
+  "year": 2024,
+  "month": 2
+}
+```
+
+### 응답 예시
+```json
+{
+  "contractId": 1,
+  "year": 2024,
+  "month": 2,
+  "totalWorkHours": 160.0,
+  "basePay": 1600000,
+  "overtimePay": 75000,
+  "nightPay": 50000,
+  "holidayPay": 30000,
+  "weeklyPaidLeaveAmount": 80000,
+  "totalGrossPay": 1835000,
+  "fourMajorInsurance": 80000,
+  "incomeTax": 50000,
+  "localIncomeTax": 5000,
+  "totalDeduction": 135000,
+  "netPay": 1700000,
+  "paymentDueDate": "2024-02-15"
+}
+```
+
+## 🔗 관련 파일
+
+### 엔티티
+- `WorkRecord.java` - 근무 기록
+- `WeeklyAllowance.java` - 주간 수당
+- `Salary.java` - 월급
+- `WorkerContract.java` - 근로 계약
+
+### 서비스
+- `WorkRecordCommandService.java` - 근무 기록 생성/수정/삭제
+- `WorkRecordCoordinatorService.java` - 근무 기록과 다른 도메인 간 협력
+- `WeeklyAllowanceService.java` - 주간 수당 계산
+- `SalaryService.java` - 급여 계산
+
+### 컨트롤러
+- `EmployerWorkRecordController.java` - 고용주용 근무 기록 API
+- `WorkerWorkRecordController.java` - 근로자용 근무 기록 API
+
+## 📚 참고 자료
+
+- 근로기준법 제56조 (연장·야간 및 휴일 근로)
+- 근로기준법 시행령 제6조 (주휴일)
+- 최저임금법
+
+---
+
+**작성일**: 2024년
+**최종 수정일**: 2024년
+**버전**: 1.0.0

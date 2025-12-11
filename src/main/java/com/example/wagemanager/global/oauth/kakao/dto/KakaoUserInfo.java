@@ -5,16 +5,6 @@ import lombok.Builder;
 @Builder
 public record KakaoUserInfo(
         String kakaoId,
-        String name,
-        String nickname,
-        String phoneNumber,
-        String profileImageUrl
+        String name
 ) {
-
-    public String displayName() {
-        if (name != null && !name.isBlank()) {
-            return name;
-        }
-        return nickname;
-    }
 }

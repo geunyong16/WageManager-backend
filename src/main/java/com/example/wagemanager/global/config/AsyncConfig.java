@@ -1,4 +1,4 @@
-package com.example.wagemanager.config;
+package com.example.wagemanager.global.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.AsyncConfigurer;

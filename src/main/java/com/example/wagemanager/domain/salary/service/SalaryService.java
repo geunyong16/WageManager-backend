@@ -120,14 +120,49 @@ public class SalaryService {
             totalHolidayPay = totalHolidayPay.add(record.getHolidaySalary());
         }
 
-        // WeeklyAllowance에서 주휴수당과 연장수당 조회 (년/월 기준 필터링)
+        // ========================================
+        // 주휴수당 및 연장수당 계산 (마지막 주차 이월 정책 적용)
+        // ========================================
+
+        // 당월 WeeklyAllowance 조회
         List<WeeklyAllowance> weeklyAllowances = weeklyAllowanceRepository.findByContractIdAndYearMonth(contractId, year, month);
         BigDecimal totalWeeklyPaidLeaveAmount = BigDecimal.ZERO;
         BigDecimal totalOvertimePay = BigDecimal.ZERO;
 
+        // 월급날 계산 (당월 paymentDay)
+        LocalDate paymentDayDate = LocalDate.of(year, month, paymentDay);
+
+        // 당월 WeeklyAllowance 처리
         for (WeeklyAllowance allowance : weeklyAllowances) {
-            totalWeeklyPaidLeaveAmount = totalWeeklyPaidLeaveAmount.add(allowance.getWeeklyPaidLeaveAmount());
-            totalOvertimePay = totalOvertimePay.add(allowance.getOvertimeAmount());
+            // 마지막 주차 판단: 월급날이 해당 주(weekStartDate ~ weekEndDate)에 포함되는지 확인
+            boolean isLastWeek = !paymentDayDate.isBefore(allowance.getWeekStartDate())
+                              && !paymentDayDate.isAfter(allowance.getWeekEndDate());
+
+            if (!isLastWeek) {
+                // 마지막 주차가 아니면 현재 월 급여에 포함
+                totalWeeklyPaidLeaveAmount = totalWeeklyPaidLeaveAmount.add(allowance.getWeeklyPaidLeaveAmount());
+                totalOvertimePay = totalOvertimePay.add(allowance.getOvertimeAmount());
+            }
+            // 마지막 주차면 제외 (다음 달 급여로 이월)
+        }
+
+        // 전월에서 이월된 수당 포함
+        LocalDate previousMonth = paymentDayDate.minusMonths(1);
+        List<WeeklyAllowance> previousMonthAllowances = weeklyAllowanceRepository.findByContractIdAndYearMonth(
+                contractId, previousMonth.getYear(), previousMonth.getMonthValue());
+
+        LocalDate previousPaymentDayDate = LocalDate.of(previousMonth.getYear(), previousMonth.getMonthValue(), paymentDay);
+
+        for (WeeklyAllowance allowance : previousMonthAllowances) {
+            // 전월의 마지막 주차(전월 월급날이 포함된 주)를 찾아서 현재 월 급여에 포함
+            boolean isPreviousLastWeek = !previousPaymentDayDate.isBefore(allowance.getWeekStartDate())
+                                      && !previousPaymentDayDate.isAfter(allowance.getWeekEndDate());
+
+            if (isPreviousLastWeek) {
+                // 전월 마지막 주차의 수당을 현재 월 급여에 추가 (이월분)
+                totalWeeklyPaidLeaveAmount = totalWeeklyPaidLeaveAmount.add(allowance.getWeeklyPaidLeaveAmount());
+                totalOvertimePay = totalOvertimePay.add(allowance.getOvertimeAmount());
+            }
         }
 
         BigDecimal totalGrossPay = totalBasePay.add(totalNightPay).add(totalHolidayPay)

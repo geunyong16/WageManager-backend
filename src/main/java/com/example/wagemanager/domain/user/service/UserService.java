@@ -3,6 +3,7 @@ package com.example.wagemanager.domain.user.service;
 import com.example.wagemanager.common.exception.ErrorCode;
 import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.employer.service.EmployerService;
+import com.example.wagemanager.domain.settings.service.UserSettingsService;
 import com.example.wagemanager.domain.user.dto.UserDto;
 import com.example.wagemanager.domain.user.entity.User;
 import com.example.wagemanager.domain.user.enums.UserType;
@@ -21,6 +22,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final WorkerService workerService;
     private final EmployerService employerService;
+    private final UserSettingsService userSettingsService;
 
     public UserDto.Response getUserById(Long userId) {
         User user = userRepository.findById(userId)
@@ -56,6 +58,9 @@ public class UserService {
                 .build();
 
         User savedUser = userRepository.save(user);
+
+        // UserSettings 자동 생성
+        userSettingsService.createDefaultSettings(savedUser.getId());
 
         String workerCode = null;
 

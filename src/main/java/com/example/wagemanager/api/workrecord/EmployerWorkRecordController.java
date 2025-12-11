@@ -2,7 +2,8 @@ package com.example.wagemanager.api.workrecord;
 
 import com.example.wagemanager.common.dto.ApiResponse;
 import com.example.wagemanager.domain.workrecord.dto.WorkRecordDto;
-import com.example.wagemanager.domain.workrecord.service.WorkRecordService;
+import com.example.wagemanager.domain.workrecord.service.WorkRecordCommandService;
+import com.example.wagemanager.domain.workrecord.service.WorkRecordQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,22 +22,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EmployerWorkRecordController {
 
-    private final WorkRecordService workRecordService;
+    private final WorkRecordQueryService workRecordQueryService;
+    private final WorkRecordCommandService workRecordCommandService;
 
-    @Operation(summary = "근무 일정 등록", description = "단일 직원의 근무 일정을 등록합니다.")
+    @Operation(summary = "근무 일정 등록", description = "고용주가 단일 근무 일정을 생성합니다. 생성 시 근로자에게 알람이 전송됩니다.")
     @PreAuthorize("@contractPermission.canAccessAsEmployer(#request.contractId)")
     @PostMapping
     public ApiResponse<WorkRecordDto.Response> createWorkRecord(
             @Valid @RequestBody WorkRecordDto.CreateRequest request) {
-        return ApiResponse.success(workRecordService.createWorkRecord(request));
-    }
-
-    @Operation(summary = "근무 일정 일괄 등록", description = "여러 직원의 근무 일정을 한 번에 등록합니다.")
-    @PreAuthorize("@contractPermission.canAccessAsEmployer(#request.contractId)")
-    @PostMapping("/batch")
-    public ApiResponse<List<WorkRecordDto.Response>> batchCreateWorkRecords(
-            @Valid @RequestBody WorkRecordDto.BatchCreateRequest request) {
-        return ApiResponse.success(workRecordService.batchCreateWorkRecords(request));
+        // TODO: 근로자에게 근무 일정 생성 알람 전송
+        return ApiResponse.success(workRecordCommandService.createWorkRecord(request));
     }
 
     @Operation(summary = "근무 기록 조회 (캘린더)", description = "특정 사업장의 기간별 근무 기록을 캘린더 형식으로 조회합니다.")
@@ -47,7 +42,7 @@ public class EmployerWorkRecordController {
             @Parameter(description = "조회 시작일 (yyyy-MM-dd)", required = true) @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "조회 종료일 (yyyy-MM-dd)", required = true) @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
         return ApiResponse.success(
-                workRecordService.getWorkRecordsByWorkplaceAndDateRange(workplaceId, startDate, endDate));
+                workRecordQueryService.getWorkRecordsByWorkplaceAndDateRange(workplaceId, startDate, endDate));
     }
 
     @Operation(summary = "근무 기록 상세 조회", description = "특정 근무 기록의 상세 정보를 조회합니다.")
@@ -55,7 +50,7 @@ public class EmployerWorkRecordController {
     @GetMapping("/{id}")
     public ApiResponse<WorkRecordDto.DetailedResponse> getWorkRecord(
             @Parameter(description = "근무 기록 ID", required = true) @PathVariable Long id) {
-        return ApiResponse.success(workRecordService.getWorkRecordById(id));
+        return ApiResponse.success(workRecordQueryService.getWorkRecordById(id));
     }
 
     @Operation(summary = "근무 일정 수정", description = "등록된 근무 일정 정보를 수정합니다.")
@@ -64,7 +59,7 @@ public class EmployerWorkRecordController {
     public ApiResponse<WorkRecordDto.Response> updateWorkRecord(
             @Parameter(description = "근무 기록 ID", required = true) @PathVariable Long id,
             @RequestBody WorkRecordDto.UpdateRequest request) {
-        return ApiResponse.success(workRecordService.updateWorkRecord(id, request));
+        return ApiResponse.success(workRecordCommandService.updateWorkRecord(id, request));
     }
 
     @Operation(summary = "근무 완료 처리", description = "근무 일정을 완료 상태로 변경합니다.")
@@ -72,7 +67,7 @@ public class EmployerWorkRecordController {
     @PutMapping("/{id}/complete")
     public ApiResponse<Void> completeWorkRecord(
             @Parameter(description = "근무 기록 ID", required = true) @PathVariable Long id) {
-        workRecordService.completeWorkRecord(id);
+        workRecordCommandService.completeWorkRecord(id);
         return ApiResponse.success(null);
     }
 
@@ -81,7 +76,7 @@ public class EmployerWorkRecordController {
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteWorkRecord(
             @Parameter(description = "근무 기록 ID", required = true) @PathVariable Long id) {
-        workRecordService.deleteWorkRecord(id);
+        workRecordCommandService.deleteWorkRecord(id);
         return ApiResponse.success(null);
     }
 }
