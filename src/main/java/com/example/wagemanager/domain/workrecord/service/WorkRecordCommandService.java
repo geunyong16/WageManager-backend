@@ -23,7 +23,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -345,11 +344,10 @@ public class WorkRecordCommandService {
      * 고용주가 근무 일정 일괄 생성
      * 여러 날짜에 동일한 시간으로 일정 생성
      */
-    public Map<String, Object> createWorkRecordsBatch(WorkRecordDto.BatchCreateRequest request) {
+    public WorkRecordDto.BatchCreateResponse createWorkRecordsBatch(WorkRecordDto.BatchCreateRequest request) {
         WorkerContract contract = workerContractRepository.findById(request.getContractId())
                 .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
 
-        List<WorkRecord> createdRecords = new ArrayList<>();
         int createdCount = 0;
 
         for (LocalDate workDate : request.getWorkDates()) {
@@ -387,7 +385,6 @@ public class WorkRecordCommandService {
                     .build();
 
             WorkRecord savedRecord = workRecordRepository.save(workRecord);
-            createdRecords.add(savedRecord);
             createdCount++;
 
             // 도메인 간 협력 처리
@@ -416,11 +413,11 @@ public class WorkRecordCommandService {
         }
 
         // 결과 반환
-        Map<String, Object> result = new HashMap<>();
-        result.put("createdCount", createdCount);
-        result.put("skippedCount", request.getWorkDates().size() - createdCount);
-        result.put("totalRequested", request.getWorkDates().size());
-        return result;
+        return WorkRecordDto.BatchCreateResponse.builder()
+                .createdCount(createdCount)
+                .skippedCount(request.getWorkDates().size() - createdCount)
+                .totalRequested(request.getWorkDates().size())
+                .build();
     }
 
     private int calculateWorkMinutes(LocalDateTime start, LocalDateTime end, int breakMinutes) {
