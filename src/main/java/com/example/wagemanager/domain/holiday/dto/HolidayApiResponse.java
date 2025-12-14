@@ -1,0 +1,97 @@
+package com.example.wagemanager.domain.holiday.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * 한국천문연구원 특일정보 API 응답 DTO
+ * XML 형식 응답 파싱용
+ */
+@Data
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JacksonXmlRootElement(localName = "response")
+public class HolidayApiResponse {
+
+    @JacksonXmlProperty(localName = "header")
+    private Header header;
+
+    @JacksonXmlProperty(localName = "body")
+    private Body body;
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Header {
+        @JacksonXmlProperty(localName = "resultCode")
+        private String resultCode;
+
+        @JacksonXmlProperty(localName = "resultMsg")
+        private String resultMsg;
+
+        public boolean isSuccess() {
+            return "00".equals(resultCode);
+        }
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Body {
+        @JacksonXmlProperty(localName = "totalCount")
+        private Integer totalCount;
+
+        @JacksonXmlProperty(localName = "numOfRows")
+        private Integer numOfRows;
+
+        @JacksonXmlProperty(localName = "pageNo")
+        private Integer pageNo;
+
+        @JacksonXmlProperty(localName = "items")
+        private Items items;
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Items {
+        @JacksonXmlElementWrapper(useWrapping = false)
+        @JacksonXmlProperty(localName = "item")
+        private List<HolidayItem> item;
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class HolidayItem {
+        /**
+         * 날짜 (예: "20250101")
+         */
+        @JacksonXmlProperty(localName = "locdate")
+        private String locdate;
+
+        /**
+         * 공휴일명 (예: "신정")
+         */
+        @JacksonXmlProperty(localName = "dateName")
+        private String dateName;
+
+        /**
+         * 양력/음력 구분 (Y: 양력, N: 음력)
+         */
+        @JacksonXmlProperty(localName = "isHoliday")
+        private String isHoliday;
+
+        /**
+         * 비고
+         */
+        @JacksonXmlProperty(localName = "remarks")
+        private String remarks;
+
+        /**
+         * 순번
+         */
+        @JacksonXmlProperty(localName = "seq")
+        private Integer seq;
+    }
+}
