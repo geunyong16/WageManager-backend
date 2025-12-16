@@ -16,16 +16,18 @@ public class KakaoUserResponse {
     @Getter
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class KakaoAccount {
-        private String name;
+        private KakaoProfile profile;
+    }
+
+    @Getter
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class KakaoProfile {
+        private String nickname;
     }
 
     public KakaoUserInfo toUserInfo() {
-        String kakaoIdValue = id != null ? String.valueOf(id) : null;
-        String nameValue = null;
-
-        if (kakaoAccount != null) {
-            nameValue = kakaoAccount.getName();
-        }
+        String kakaoIdValue = String.valueOf(id);
+        String nameValue = kakaoAccount.getProfile().getNickname();
 
         return KakaoUserInfo.builder()
                 .kakaoId(kakaoIdValue)
