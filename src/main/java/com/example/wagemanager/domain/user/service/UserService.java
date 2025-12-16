@@ -30,12 +30,6 @@ public class UserService {
         return UserDto.Response.from(user);
     }
 
-    public UserDto.Response getUserByKakaoId(String kakaoId) {
-        User user = userRepository.findByKakaoId(kakaoId)
-                .orElseThrow(() -> new NotFoundException(ErrorCode.USER_NOT_FOUND, "사용자를 찾을 수 없습니다."));
-        return UserDto.Response.from(user);
-    }
-
     @Transactional
     public UserDto.Response updateUser(Long userId, UserDto.UpdateRequest request) {
         User user = userRepository.findById(userId)

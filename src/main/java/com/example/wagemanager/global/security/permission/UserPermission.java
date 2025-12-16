@@ -21,16 +21,6 @@ public class UserPermission {
         return currentUser.getId().equals(userId);
     }
 
-    public boolean canAccessByKakaoId(String kakaoId) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
-            return false;
-        }
-
-        User currentUser = (User) authentication.getPrincipal();
-        return currentUser.getKakaoId().equals(kakaoId);
-    }
-
     public boolean isEmployer() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !(authentication.getPrincipal() instanceof User)) {
