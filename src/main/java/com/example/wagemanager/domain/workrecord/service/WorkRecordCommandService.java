@@ -35,6 +35,7 @@ public class WorkRecordCommandService {
     private final WorkRecordRepository workRecordRepository;
     private final WorkerContractRepository workerContractRepository;
     private final WorkRecordCoordinatorService coordinatorService;
+    private final WorkRecordGenerationService workRecordGenerationService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -418,6 +419,25 @@ public class WorkRecordCommandService {
                 .skippedCount(request.getWorkDates().size() - createdCount)
                 .totalRequested(request.getWorkDates().size())
                 .build();
+    }
+
+    /**
+     * 계약 정보 변경 시 미래 WorkRecord 재생성
+     * - 오늘 이후의 SCHEDULED 상태 WorkRecord 삭제
+     * - 변경된 근무 스케줄로 새로운 WorkRecord 생성
+     */
+    public void regenerateFutureWorkRecords(Long contractId) {
+        WorkerContract contract = workerContractRepository.findById(contractId)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
+
+        // 오늘 이후의 SCHEDULED 상태 WorkRecord 삭제
+        workRecordRepository.deleteByContractIdAndWorkDateAfterAndStatus(
+                contractId, LocalDate.now(), WorkRecordStatus.SCHEDULED);
+
+        // 새로운 WorkRecord 생성 (오늘+1 ~ 2개월 뒤)
+        LocalDate startDate = LocalDate.now().plusDays(1);
+        LocalDate endDate = startDate.plusMonths(2);
+        workRecordGenerationService.generateWorkRecordsForPeriod(contract, startDate, endDate);
     }
 
     private int calculateWorkMinutes(LocalDateTime start, LocalDateTime end, int breakMinutes) {

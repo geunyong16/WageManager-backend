@@ -11,6 +11,7 @@ import com.example.wagemanager.domain.worker.repository.WorkerRepository;
 import com.example.wagemanager.domain.workplace.entity.Workplace;
 import com.example.wagemanager.domain.workplace.repository.WorkplaceRepository;
 import com.example.wagemanager.domain.workrecord.service.WorkRecordGenerationService;
+import com.example.wagemanager.domain.workrecord.service.WorkRecordCommandService;
 import com.example.wagemanager.domain.contract.dto.WorkScheduleDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +31,7 @@ public class ContractService {
     private final WorkplaceRepository workplaceRepository;
     private final WorkerRepository workerRepository;
     private final WorkRecordGenerationService workRecordGenerationService;
+    private final WorkRecordCommandService workRecordCommandService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -105,6 +107,10 @@ public class ContractService {
                 ? convertWorkSchedulesToJson(request.getWorkSchedules())
                 : null;
 
+        // 근무 스케줄 변경 여부 확인
+        boolean workScheduleChanged = workSchedulesJson != null
+                && !workSchedulesJson.equals(contract.getWorkSchedules());
+
         contract.update(
                 request.getHourlyWage(),
                 workSchedulesJson,
@@ -112,6 +118,11 @@ public class ContractService {
                 request.getPaymentDay(),
                 request.getPayrollDeductionType()
         );
+
+        // 근무 스케줄이 변경된 경우 미래 WorkRecord 재생성
+        if (workScheduleChanged) {
+            workRecordCommandService.regenerateFutureWorkRecords(contractId);
+        }
 
         return ContractDto.Response.from(contract);
     }

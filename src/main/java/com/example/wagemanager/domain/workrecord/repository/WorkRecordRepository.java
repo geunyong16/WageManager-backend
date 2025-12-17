@@ -98,4 +98,15 @@ public interface WorkRecordRepository extends JpaRepository<WorkRecord, Long> {
             @Param("workplaceId") Long workplaceId,
             @Param("status") WorkRecordStatus status
     );
+
+    // 계약 정보 변경 시 미래 WorkRecord 삭제
+    @Query("DELETE FROM WorkRecord wr " +
+            "WHERE wr.contract.id = :contractId " +
+            "AND wr.workDate > :date " +
+            "AND wr.status = :status")
+    void deleteByContractIdAndWorkDateAfterAndStatus(
+            @Param("contractId") Long contractId,
+            @Param("date") LocalDate date,
+            @Param("status") WorkRecordStatus status
+    );
 }
