@@ -61,12 +61,14 @@ public class WorkRecordCoordinatorService {
      */
     public void handleWorkRecordUpdate(WorkRecord workRecord, WeeklyAllowance oldWeeklyAllowance, WeeklyAllowance newWeeklyAllowance) {
         // 기존 WeeklyAllowance 수당 재계산 (다른 WeeklyAllowance였다면)
-        if (oldWeeklyAllowance != null && !oldWeeklyAllowance.getId().equals(newWeeklyAllowance.getId())) {
+        if (oldWeeklyAllowance != null && newWeeklyAllowance != null && !oldWeeklyAllowance.getId().equals(newWeeklyAllowance.getId())) {
             weeklyAllowanceService.recalculateAllowances(oldWeeklyAllowance.getId());
         }
 
-        // 새로운 WeeklyAllowance 수당 재계산
-        weeklyAllowanceService.recalculateAllowances(newWeeklyAllowance.getId());
+        // 새로운 WeeklyAllowance 수당 재계산 (null이 아닐 때만)
+        if (newWeeklyAllowance != null) {
+            weeklyAllowanceService.recalculateAllowances(newWeeklyAllowance.getId());
+        }
 
         // COMPLETED 상태일 때만 급여 재계산
         if (workRecord.getStatus() == WorkRecordStatus.COMPLETED) {
