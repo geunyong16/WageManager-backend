@@ -62,6 +62,7 @@ public class ErrorCode {
     public static final String INVALID_WORK_RECORD_STATUS = "INVALID_WORK_RECORD_STATUS";
     public static final String DUPLICATE_CORRECTION_REQUEST = "DUPLICATE_CORRECTION_REQUEST";
     public static final String INVALID_CORRECTION_STATUS = "INVALID_CORRECTION_STATUS";
+    public static final String INVALID_REQUEST_TYPE = "INVALID_REQUEST_TYPE";
     public static final String SALARY_NOT_CALCULATED = "SALARY_NOT_CALCULATED";
     public static final String PAYMENT_ALREADY_COMPLETED = "PAYMENT_ALREADY_COMPLETED";
     public static final String KAKAO_USER_INFO_FAILED = "KAKAO_USER_INFO_FAILED";

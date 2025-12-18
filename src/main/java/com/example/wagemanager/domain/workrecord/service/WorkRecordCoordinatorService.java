@@ -26,15 +26,15 @@ public class WorkRecordCoordinatorService {
 
     /**
      * 근무 기록 생성 시 WeeklyAllowance 연동 처리
-     * SCHEDULED 상태로 생성되므로 급여 재계산 불필요
-     * PENDING_APPROVAL 상태는 수당 재계산 제외 (승인 후 재계산)
+     * SCHEDULED 또는 COMPLETED 상태로 생성되므로 급여 재계산
+     * DELETED 상태는 수당 재계산 제외
      */
     public void handleWorkRecordCreation(WorkRecord workRecord) {
         // 양방향 관계 동기화
         workRecord.addToWeeklyAllowance();
 
-        // PENDING_APPROVAL 상태는 WeeklyAllowance 재계산 제외
-        if (workRecord.getStatus() != WorkRecordStatus.PENDING_APPROVAL) {
+        // DELETED 상태는 WeeklyAllowance 재계산 제외
+        if (workRecord.getStatus() != WorkRecordStatus.DELETED) {
             // WeeklyAllowance의 수당 재계산 (SCHEDULED, COMPLETED만 주휴수당 계산에 포함)
             weeklyAllowanceService.recalculateAllowances(workRecord.getWeeklyAllowance().getId());
         }
@@ -140,11 +140,4 @@ public class WorkRecordCoordinatorService {
         return weeklyAllowanceService.getOrCreateWeeklyAllowanceForDate(contractId, workDate);
     }
 
-    /**
-     * 근무 일정 생성 요청 승인 시 주휴수당 재계산
-     * PENDING_APPROVAL → SCHEDULED 상태 변경 후 호출
-     */
-    public void recalculateAllowanceAfterApproval(WorkRecord workRecord) {
-        weeklyAllowanceService.recalculateAllowances(workRecord.getWeeklyAllowance().getId());
-    }
 }

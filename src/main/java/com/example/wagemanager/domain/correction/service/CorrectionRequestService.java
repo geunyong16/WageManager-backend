@@ -4,13 +4,20 @@ import com.example.wagemanager.common.exception.BadRequestException;
 import com.example.wagemanager.common.exception.ErrorCode;
 import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.common.exception.UnauthorizedException;
+import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
+import com.example.wagemanager.domain.contract.entity.WorkerContract;
+import com.example.wagemanager.domain.contract.repository.WorkerContractRepository;
 import com.example.wagemanager.domain.correction.dto.CorrectionRequestDto;
 import com.example.wagemanager.domain.correction.entity.CorrectionRequest;
 import com.example.wagemanager.domain.correction.enums.CorrectionStatus;
+import com.example.wagemanager.domain.correction.enums.RequestType;
 import com.example.wagemanager.domain.correction.repository.CorrectionRequestRepository;
 import com.example.wagemanager.domain.user.entity.User;
+import com.example.wagemanager.domain.workrecord.dto.WorkRecordDto;
 import com.example.wagemanager.domain.workrecord.entity.WorkRecord;
 import com.example.wagemanager.domain.workrecord.repository.WorkRecordRepository;
+import com.example.wagemanager.domain.workrecord.service.WorkRecordCommandService;
+import com.example.wagemanager.domain.workrecord.service.WorkRecordCoordinatorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,18 +32,77 @@ public class CorrectionRequestService {
 
     private final CorrectionRequestRepository correctionRequestRepository;
     private final WorkRecordRepository workRecordRepository;
+    private final WorkerContractRepository workerContractRepository;
+    private final WorkRecordCommandService workRecordCommandService;
+    private final WorkRecordCoordinatorService coordinatorService;
 
     // ===== 근로자용 API =====
 
     /**
-     * 정정요청 생성
+     * 정정요청 생성 (CREATE/UPDATE/DELETE 타입 지원)
      */
     @Transactional
     public CorrectionRequestDto.Response createCorrectionRequest(User requester, CorrectionRequestDto.CreateRequest request) {
+        // 타입별 분기 처리
+        if (request.getType() == RequestType.CREATE) {
+            return createCreateRequest(requester, request);
+        } else if (request.getType() == RequestType.UPDATE) {
+            return createUpdateRequest(requester, request);
+        } else if (request.getType() == RequestType.DELETE) {
+            return createDeleteRequest(requester, request);
+        }
+
+        throw new BadRequestException(ErrorCode.INVALID_REQUEST_TYPE, "지원하지 않는 요청 타입입니다.");
+    }
+
+    private CorrectionRequestDto.Response createCreateRequest(User requester, CorrectionRequestDto.CreateRequest request) {
+        // 계약 조회 및 권한 확인
+        WorkerContract contract = workerContractRepository.findById(request.getContractId())
+                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
+
+        if (!contract.getWorker().getUser().getId().equals(requester.getId())) {
+            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED_ACCESS, "본인의 계약에 대해서만 요청할 수 있습니다.");
+        }
+
+        // 중복 CREATE 요청 확인 - 동일한 시간대에 요청이 있는지 확인
+        if (correctionRequestRepository.existsPendingCreateRequestWithTimeOverlap(
+                request.getContractId(),
+                request.getRequestedWorkDate(),
+                request.getRequestedStartTime(),
+                request.getRequestedEndTime())) {
+            throw new BadRequestException(ErrorCode.DUPLICATE_CORRECTION_REQUEST, "해당 시간대에 이미 생성 요청이 있습니다.");
+        }
+
+        CorrectionRequest correctionRequest = CorrectionRequest.builder()
+                .type(RequestType.CREATE)
+                .workRecord(null)
+                .contract(contract)
+                .requester(requester)
+                .originalWorkDate(null)
+                .originalStartTime(null)
+                .originalEndTime(null)
+                .requestedWorkDate(request.getRequestedWorkDate())
+                .requestedStartTime(request.getRequestedStartTime())
+                .requestedEndTime(request.getRequestedEndTime())
+                .requestedBreakMinutes(request.getRequestedBreakMinutes())
+                .requestedMemo(request.getRequestedMemo())
+                .status(CorrectionStatus.PENDING)
+                .build();
+
+        CorrectionRequest savedRequest = correctionRequestRepository.save(correctionRequest);
+        return CorrectionRequestDto.Response.from(savedRequest);
+    }
+
+    private CorrectionRequestDto.Response createUpdateRequest(User requester, CorrectionRequestDto.CreateRequest request) {
         WorkRecord workRecord = workRecordRepository.findById(request.getWorkRecordId())
                 .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
 
-        // 해당 근무기록에 이미 대기중인 정정요청이 있는지 확인
+        // 이미 삭제된 근무 기록인지 확인
+        if (workRecord.getStatus() == com.example.wagemanager.domain.workrecord.enums.WorkRecordStatus.DELETED) {
+            throw new BadRequestException(ErrorCode.INVALID_WORK_RECORD_STATUS, "삭제된 근무 기록은 수정할 수 없습니다.");
+        }
+
+        // 중복 UPDATE 요청 확인
         if (correctionRequestRepository.existsByWorkRecordIdAndStatus(request.getWorkRecordId(), CorrectionStatus.PENDING)) {
             throw new BadRequestException(ErrorCode.DUPLICATE_CORRECTION_REQUEST, "해당 근무 기록에 이미 대기중인 정정요청이 있습니다.");
         }
@@ -47,16 +113,57 @@ public class CorrectionRequestService {
         }
 
         CorrectionRequest correctionRequest = CorrectionRequest.builder()
+                .type(RequestType.UPDATE)
                 .workRecord(workRecord)
+                .contract(null)
                 .requester(requester)
-                // 원본 시간 저장 (생성 시점의 WorkRecord 값)
                 .originalWorkDate(workRecord.getWorkDate())
                 .originalStartTime(workRecord.getStartTime())
                 .originalEndTime(workRecord.getEndTime())
-                // 요청 시간
                 .requestedWorkDate(request.getRequestedWorkDate())
                 .requestedStartTime(request.getRequestedStartTime())
                 .requestedEndTime(request.getRequestedEndTime())
+                .requestedBreakMinutes(request.getRequestedBreakMinutes())
+                .requestedMemo(request.getRequestedMemo())
+                .status(CorrectionStatus.PENDING)
+                .build();
+
+        CorrectionRequest savedRequest = correctionRequestRepository.save(correctionRequest);
+        return CorrectionRequestDto.Response.from(savedRequest);
+    }
+
+    private CorrectionRequestDto.Response createDeleteRequest(User requester, CorrectionRequestDto.CreateRequest request) {
+        WorkRecord workRecord = workRecordRepository.findById(request.getWorkRecordId())
+                .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
+
+        // 이미 삭제된 근무 기록인지 확인
+        if (workRecord.getStatus() == com.example.wagemanager.domain.workrecord.enums.WorkRecordStatus.DELETED) {
+            throw new BadRequestException(ErrorCode.INVALID_WORK_RECORD_STATUS, "이미 삭제된 근무 기록입니다.");
+        }
+
+        // 중복 DELETE 요청 확인
+        if (correctionRequestRepository.existsByWorkRecordIdAndStatus(request.getWorkRecordId(), CorrectionStatus.PENDING)) {
+            throw new BadRequestException(ErrorCode.DUPLICATE_CORRECTION_REQUEST, "해당 근무 기록에 이미 대기중인 삭제 요청이 있습니다.");
+        }
+
+        // 본인의 근무기록인지 확인
+        if (!workRecord.getContract().getWorker().getUser().getId().equals(requester.getId())) {
+            throw new UnauthorizedException(ErrorCode.UNAUTHORIZED_ACCESS, "본인의 근무 기록에 대해서만 삭제요청을 할 수 있습니다.");
+        }
+
+        CorrectionRequest correctionRequest = CorrectionRequest.builder()
+                .type(RequestType.DELETE)
+                .workRecord(workRecord)
+                .contract(null)
+                .requester(requester)
+                .originalWorkDate(workRecord.getWorkDate())
+                .originalStartTime(workRecord.getStartTime())
+                .originalEndTime(workRecord.getEndTime())
+                .requestedWorkDate(workRecord.getWorkDate())
+                .requestedStartTime(workRecord.getStartTime())
+                .requestedEndTime(workRecord.getEndTime())
+                .requestedBreakMinutes(workRecord.getBreakMinutes())
+                .requestedMemo(request.getRequestedMemo())
                 .status(CorrectionStatus.PENDING)
                 .build();
 
@@ -145,7 +252,7 @@ public class CorrectionRequestService {
     }
 
     /**
-     * 정정요청 승인
+     * 정정요청 승인 (CREATE/UPDATE/DELETE 타입별 처리)
      */
     @Transactional
     public CorrectionRequestDto.Response approveCorrectionRequest(Long correctionRequestId) {
@@ -157,9 +264,66 @@ public class CorrectionRequestService {
             throw new BadRequestException(ErrorCode.INVALID_CORRECTION_STATUS, "대기중인 정정요청만 승인할 수 있습니다.");
         }
 
+        // 타입별 승인 로직 실행
+        if (correctionRequest.isCreateType()) {
+            approveCreateRequest(correctionRequest);
+        } else if (correctionRequest.isUpdateType()) {
+            approveUpdateRequest(correctionRequest);
+        } else if (correctionRequest.isDeleteType()) {
+            approveDeleteRequest(correctionRequest);
+        }
+
+        // 상태 업데이트
         correctionRequest.approve();
 
         return CorrectionRequestDto.Response.from(correctionRequest);
+    }
+
+    private void approveCreateRequest(CorrectionRequest correctionRequest) {
+        // WorkRecord 생성
+        WorkRecordDto.CreateRequest createRequest = WorkRecordDto.CreateRequest.builder()
+                .contractId(correctionRequest.getContract().getId())
+                .workDate(correctionRequest.getRequestedWorkDate())
+                .startTime(correctionRequest.getRequestedStartTime())
+                .endTime(correctionRequest.getRequestedEndTime())
+                .breakMinutes(correctionRequest.getRequestedBreakMinutes() != null ?
+                        correctionRequest.getRequestedBreakMinutes() : 0)
+                .build();
+
+        workRecordCommandService.createWorkRecordByEmployer(createRequest);
+    }
+
+    private void approveUpdateRequest(CorrectionRequest correctionRequest) {
+        WorkRecord workRecord = correctionRequest.getWorkRecord();
+
+        // 기존 WeeklyAllowance 저장 (재계산용)
+        WeeklyAllowance oldWeeklyAllowance = workRecord.getWeeklyAllowance();
+
+        // WorkRecord 업데이트
+        workRecord.updateWorkTime(
+                correctionRequest.getRequestedStartTime(),
+                correctionRequest.getRequestedEndTime(),
+                correctionRequest.getRequestedMemo()
+        );
+
+        // WeeklyAllowance 및 Salary 재계산
+        coordinatorService.handleWorkRecordUpdate(workRecord, oldWeeklyAllowance, workRecord.getWeeklyAllowance());
+    }
+
+    private void approveDeleteRequest(CorrectionRequest correctionRequest) {
+        WorkRecord workRecord = correctionRequest.getWorkRecord();
+
+        // 소프트 삭제
+        workRecord.markAsDeleted();
+
+        // WeeklyAllowance 및 Salary 재계산 처리
+        if (workRecord.getWeeklyAllowance() != null) {
+            coordinatorService.handleWorkRecordDeletion(
+                    workRecord.getWeeklyAllowance(),
+                    workRecord,
+                    workRecord.getStatus()
+            );
+        }
     }
 
     /**

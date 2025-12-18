@@ -2,11 +2,14 @@ package com.example.wagemanager.domain.correction.repository;
 
 import com.example.wagemanager.domain.correction.entity.CorrectionRequest;
 import com.example.wagemanager.domain.correction.enums.CorrectionStatus;
+import com.example.wagemanager.domain.correction.enums.RequestType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,18 +18,22 @@ public interface CorrectionRequestRepository extends JpaRepository<CorrectionReq
 
     // 근로자 본인의 정정요청 목록 조회
     @Query("SELECT cr FROM CorrectionRequest cr " +
-            "JOIN FETCH cr.workRecord wr " +
-            "JOIN FETCH wr.contract c " +
-            "JOIN FETCH c.workplace w " +
+            "LEFT JOIN FETCH cr.workRecord wr " +
+            "LEFT JOIN FETCH wr.contract wrc " +
+            "LEFT JOIN FETCH wrc.workplace wrw " +
+            "LEFT JOIN FETCH cr.contract cc " +
+            "LEFT JOIN FETCH cc.workplace cw " +
             "WHERE cr.requester.id = :requesterId " +
             "ORDER BY cr.createdAt DESC")
     List<CorrectionRequest> findByRequesterId(@Param("requesterId") Long requesterId);
 
     // 근로자 본인의 정정요청 상태별 조회
     @Query("SELECT cr FROM CorrectionRequest cr " +
-            "JOIN FETCH cr.workRecord wr " +
-            "JOIN FETCH wr.contract c " +
-            "JOIN FETCH c.workplace w " +
+            "LEFT JOIN FETCH cr.workRecord wr " +
+            "LEFT JOIN FETCH wr.contract wrc " +
+            "LEFT JOIN FETCH wrc.workplace wrw " +
+            "LEFT JOIN FETCH cr.contract cc " +
+            "LEFT JOIN FETCH cc.workplace cw " +
             "WHERE cr.requester.id = :requesterId " +
             "AND cr.status = :status " +
             "ORDER BY cr.createdAt DESC")
@@ -37,21 +44,25 @@ public interface CorrectionRequestRepository extends JpaRepository<CorrectionReq
 
     // 사업장별 정정요청 목록 조회 (고용주용)
     @Query("SELECT cr FROM CorrectionRequest cr " +
-            "JOIN FETCH cr.workRecord wr " +
-            "JOIN FETCH wr.contract c " +
-            "JOIN FETCH c.workplace w " +
+            "LEFT JOIN FETCH cr.workRecord wr " +
+            "LEFT JOIN FETCH wr.contract wrc " +
+            "LEFT JOIN FETCH wrc.workplace wrw " +
+            "LEFT JOIN FETCH cr.contract cc " +
+            "LEFT JOIN FETCH cc.workplace cw " +
             "JOIN FETCH cr.requester r " +
-            "WHERE w.id = :workplaceId " +
+            "WHERE (wrw.id = :workplaceId OR cw.id = :workplaceId) " +
             "ORDER BY cr.createdAt DESC")
     List<CorrectionRequest> findByWorkplaceId(@Param("workplaceId") Long workplaceId);
 
     // 사업장별 + 상태별 정정요청 목록 조회 (고용주용)
     @Query("SELECT cr FROM CorrectionRequest cr " +
-            "JOIN FETCH cr.workRecord wr " +
-            "JOIN FETCH wr.contract c " +
-            "JOIN FETCH c.workplace w " +
+            "LEFT JOIN FETCH cr.workRecord wr " +
+            "LEFT JOIN FETCH wr.contract wrc " +
+            "LEFT JOIN FETCH wrc.workplace wrw " +
+            "LEFT JOIN FETCH cr.contract cc " +
+            "LEFT JOIN FETCH cc.workplace cw " +
             "JOIN FETCH cr.requester r " +
-            "WHERE w.id = :workplaceId " +
+            "WHERE (wrw.id = :workplaceId OR cw.id = :workplaceId) " +
             "AND cr.status = :status " +
             "ORDER BY cr.createdAt DESC")
     List<CorrectionRequest> findByWorkplaceIdAndStatus(
@@ -59,11 +70,31 @@ public interface CorrectionRequestRepository extends JpaRepository<CorrectionReq
             @Param("status") CorrectionStatus status
     );
 
+    // 사업장별 + 상태별 + 타입별 정정요청 목록 조회 (고용주용)
+    @Query("SELECT cr FROM CorrectionRequest cr " +
+            "LEFT JOIN FETCH cr.workRecord wr " +
+            "LEFT JOIN FETCH wr.contract wrc " +
+            "LEFT JOIN FETCH wrc.workplace wrw " +
+            "LEFT JOIN FETCH cr.contract cc " +
+            "LEFT JOIN FETCH cc.workplace cw " +
+            "JOIN FETCH cr.requester r " +
+            "WHERE (wrw.id = :workplaceId OR cw.id = :workplaceId) " +
+            "AND cr.status = :status " +
+            "AND cr.type = :type " +
+            "ORDER BY cr.createdAt DESC")
+    List<CorrectionRequest> findByWorkplaceIdAndStatusAndType(
+            @Param("workplaceId") Long workplaceId,
+            @Param("status") CorrectionStatus status,
+            @Param("type") RequestType type
+    );
+
     // 정정요청 상세 조회 (fetch join)
     @Query("SELECT cr FROM CorrectionRequest cr " +
-            "JOIN FETCH cr.workRecord wr " +
-            "JOIN FETCH wr.contract c " +
-            "JOIN FETCH c.workplace w " +
+            "LEFT JOIN FETCH cr.workRecord wr " +
+            "LEFT JOIN FETCH wr.contract wrc " +
+            "LEFT JOIN FETCH wrc.workplace wrw " +
+            "LEFT JOIN FETCH cr.contract cc " +
+            "LEFT JOIN FETCH cc.workplace cw " +
             "JOIN FETCH cr.requester r " +
             "WHERE cr.id = :id")
     Optional<CorrectionRequest> findByIdWithDetails(@Param("id") Long id);
@@ -75,5 +106,19 @@ public interface CorrectionRequestRepository extends JpaRepository<CorrectionReq
     boolean existsByWorkRecordIdAndStatus(
             @Param("workRecordId") Long workRecordId,
             @Param("status") CorrectionStatus status
+    );
+
+    // CREATE 타입의 대기중인 정정요청 존재 여부 확인 - 동일한 시간대에 요청이 있는지 확인
+    @Query("SELECT COUNT(cr) > 0 FROM CorrectionRequest cr " +
+            "WHERE cr.contract.id = :contractId " +
+            "AND cr.type = 'CREATE' " +
+            "AND cr.requestedWorkDate = :workDate " +
+            "AND cr.status = 'PENDING' " +
+            "AND (cr.requestedStartTime < :endTime AND cr.requestedEndTime > :startTime)")
+    boolean existsPendingCreateRequestWithTimeOverlap(
+            @Param("contractId") Long contractId,
+            @Param("workDate") LocalDate workDate,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime
     );
 }

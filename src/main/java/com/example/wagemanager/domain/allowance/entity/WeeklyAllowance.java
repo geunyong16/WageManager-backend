@@ -85,10 +85,10 @@ public class WeeklyAllowance extends BaseEntity {
     private BigDecimal overtimeAmount = BigDecimal.ZERO;
 
     // 주간 총 근무 시간 계산 (WorkRecord 기반)
-    // PENDING_APPROVAL 상태는 제외 (SCHEDULED, COMPLETED만 포함)
+    // DELETED 상태는 제외 (SCHEDULED, COMPLETED만 포함)
     public void calculateTotalWorkHours() {
         this.totalWorkHours = this.workRecords.stream()
-                .filter(wr -> wr.getStatus() != WorkRecordStatus.PENDING_APPROVAL)
+                .filter(wr -> wr.getStatus() != WorkRecordStatus.DELETED)
                 .map(WorkRecord::getTotalHours)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }

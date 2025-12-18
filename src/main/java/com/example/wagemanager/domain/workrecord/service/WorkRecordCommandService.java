@@ -24,7 +24,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -104,59 +103,6 @@ public class WorkRecordCommandService {
         return WorkRecordDto.Response.from(savedRecord);
     }
 
-    /**
-     * 근로자가 근무 일정 생성 요청 (승인 필요)
-     * PENDING_APPROVAL 상태로 생성
-     */
-    public WorkRecordDto.Response createWorkRecordByWorker(User worker, WorkRecordDto.CreateRequest request) {
-        WorkerContract contract = workerContractRepository.findById(request.getContractId())
-                .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
-
-        int totalMinutes = calculateWorkMinutes(
-                LocalDateTime.of(request.getWorkDate(), request.getStartTime()),
-                LocalDateTime.of(request.getWorkDate(), request.getEndTime()),
-                request.getBreakMinutes() != null ? request.getBreakMinutes() : 0
-        );
-
-        // WorkRecord가 생성된 주에 WeeklyAllowance 자동 생성/조회
-        WeeklyAllowance weeklyAllowance = coordinatorService.getOrCreateWeeklyAllowance(
-                contract.getId(), request.getWorkDate());
-
-        // 근로자가 생성하는 경우 항상 PENDING_APPROVAL 상태
-        WorkRecord workRecord = WorkRecord.builder()
-                .contract(contract)
-                .workDate(request.getWorkDate())
-                .startTime(request.getStartTime())
-                .endTime(request.getEndTime())
-                .breakMinutes(request.getBreakMinutes() != null ? request.getBreakMinutes() : 0)
-                .totalWorkMinutes(totalMinutes)
-                .status(WorkRecordStatus.PENDING_APPROVAL)
-                .memo(request.getMemo())
-                .weeklyAllowance(weeklyAllowance)
-                .build();
-
-        WorkRecord savedRecord = workRecordRepository.save(workRecord);
-
-        // 도메인 간 협력 처리 (PENDING_APPROVAL은 주휴수당 재계산 제외)
-        coordinatorService.handleWorkRecordCreation(savedRecord);
-
-        // 고용주에게 승인 요청 알림 전송
-        User employer = savedRecord.getContract().getWorkplace().getEmployer().getUser();
-        String title = String.format("%s님이 %s 근무 일정 승인을 요청했습니다.",
-                worker.getName(), request.getWorkDate().toString());
-
-        NotificationEvent event = NotificationEvent.builder()
-                .user(employer)
-                .type(NotificationType.SCHEDULE_APPROVAL_REQUEST)
-                .title(title)
-                .actionType(NotificationActionType.VIEW_WORK_RECORD)
-                .actionData(buildActionData(savedRecord.getId()))
-                .build();
-
-        eventPublisher.publishEvent(event);
-
-        return WorkRecordDto.Response.from(savedRecord);
-    }
 
     public WorkRecordDto.Response updateWorkRecord(Long workRecordId, WorkRecordDto.UpdateRequest request) {
         WorkRecord workRecord = workRecordRepository.findById(workRecordId)
@@ -222,81 +168,6 @@ public class WorkRecordCommandService {
         return WorkRecordDto.Response.from(workRecord);
     }
 
-    /**
-     * 근무 일정 승인 (PENDING_APPROVAL -> SCHEDULED)
-     */
-    public WorkRecordDto.Response approveWorkRecord(Long workRecordId) {
-        WorkRecord workRecord = workRecordRepository.findById(workRecordId)
-                .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
-
-        // PENDING_APPROVAL 상태만 승인 가능
-        if (workRecord.getStatus() != WorkRecordStatus.PENDING_APPROVAL) {
-            throw new BadRequestException(ErrorCode.INVALID_WORK_RECORD_STATUS, "승인 대기 중인 근무 일정만 승인할 수 있습니다.");
-        }
-
-        // 승인: PENDING_APPROVAL -> SCHEDULED
-        workRecord.approve();
-
-        // 주휴수당 재계산 (이제 계산에 포함됨)
-        coordinatorService.recalculateAllowanceAfterApproval(workRecord);
-
-        // 근로자에게 승인 알림 전송
-        User worker = workRecord.getContract().getWorker().getUser();
-        String title = String.format("%s 근무 일정이 승인되었습니다.", workRecord.getWorkDate().toString());
-
-        NotificationEvent event = NotificationEvent.builder()
-                .user(worker)
-                .type(NotificationType.SCHEDULE_APPROVED)
-                .title(title)
-                .actionType(NotificationActionType.VIEW_WORK_RECORD)
-                .actionData(buildActionData(workRecordId))
-                .build();
-
-        eventPublisher.publishEvent(event);
-
-        return WorkRecordDto.Response.from(workRecord);
-    }
-
-    /**
-     * 근무 일정 거절 (PENDING_APPROVAL 삭제)
-     */
-    public void rejectWorkRecord(Long workRecordId) {
-        WorkRecord workRecord = workRecordRepository.findById(workRecordId)
-                .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
-
-        // PENDING_APPROVAL 상태만 거절 가능
-        if (workRecord.getStatus() != WorkRecordStatus.PENDING_APPROVAL) {
-            throw new BadRequestException(ErrorCode.INVALID_WORK_RECORD_STATUS, "승인 대기 중인 근무 일정만 거절할 수 있습니다.");
-        }
-
-        // 알림 전송을 위해 데이터 저장
-        User worker = workRecord.getContract().getWorker().getUser();
-        LocalDate workDate = workRecord.getWorkDate();
-        WeeklyAllowance weeklyAllowance = workRecord.getWeeklyAllowance();
-        WorkRecordStatus status = workRecord.getStatus();
-
-        // 양방향 관계 해제
-        workRecord.removeFromWeeklyAllowance();
-
-        // WorkRecord 삭제
-        workRecordRepository.delete(workRecord);
-
-        // 도메인 간 협력 처리 (WeeklyAllowance 정리)
-        coordinatorService.handleWorkRecordDeletion(weeklyAllowance, workRecord, status);
-
-        // 근로자에게 거절 알림 전송
-        String title = String.format("%s 근무 일정 요청이 거절되었습니다.", workDate.toString());
-
-        NotificationEvent event = NotificationEvent.builder()
-                .user(worker)
-                .type(NotificationType.SCHEDULE_REJECTED)
-                .title(title)
-                .actionType(null)
-                .actionData(null)
-                .build();
-
-        eventPublisher.publishEvent(event);
-    }
 
     public void completeWorkRecord(Long workRecordId) {
         WorkRecord workRecord = workRecordRepository.findById(workRecordId)
@@ -307,25 +178,30 @@ public class WorkRecordCommandService {
         coordinatorService.handleWorkRecordCompletion(workRecord);
     }
 
+    /**
+     * 근무 일정 삭제 (소프트 삭제)
+     * 실제로 삭제하지 않고 status를 DELETED로 변경
+     */
     public void deleteWorkRecord(Long workRecordId) {
         WorkRecord workRecord = workRecordRepository.findById(workRecordId)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.WORK_RECORD_NOT_FOUND, "근무 기록을 찾을 수 없습니다."));
 
+        // 이미 삭제된 경우 체크
+        if (workRecord.getStatus() == WorkRecordStatus.DELETED) {
+            throw new BadRequestException(ErrorCode.INVALID_WORK_RECORD_STATUS, "이미 삭제된 근무 기록입니다.");
+        }
+
         // 알림 전송을 위해 데이터 저장
         User worker = workRecord.getContract().getWorker().getUser();
         LocalDate workDate = workRecord.getWorkDate();
-
-        // SCHEDULED, COMPLETED 모두 삭제 가능
-        WorkRecordStatus status = workRecord.getStatus();
+        WorkRecordStatus previousStatus = workRecord.getStatus();
         WeeklyAllowance weeklyAllowance = workRecord.getWeeklyAllowance();
 
-        // 양방향 관계 해제
-        workRecord.removeFromWeeklyAllowance();
+        // 소프트 삭제: status를 DELETED로 변경
+        workRecord.markAsDeleted();
 
-        workRecordRepository.delete(workRecord);
-
-        // 도메인 간 협력 처리
-        coordinatorService.handleWorkRecordDeletion(weeklyAllowance, workRecord, status);
+        // 도메인 간 협력 처리 (WeeklyAllowance 및 Salary 재계산)
+        coordinatorService.handleWorkRecordDeletion(weeklyAllowance, workRecord, previousStatus);
 
         // 근로자에게 삭제 알림 전송
         String title = String.format("%s 근무 일정이 삭제되었습니다.", workDate.toString());
