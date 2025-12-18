@@ -169,7 +169,16 @@ public class SalaryService {
                 .add(totalWeeklyPaidLeaveAmount).add(totalOvertimePay);
 
         // 세금 및 보험료 계산 (payrollDeductionType에 따라)
-        DeductionCalculator.TaxResult taxResult = DeductionCalculator.calculate(totalGrossPay, contract.getPayrollDeductionType());
+        // 근무 기록은 있지만 급여가 0원이면 4대보험 면제
+        String deductionType = contract.getPayrollDeductionType();
+
+        if ("PART_TIME_TAX_AND_INSURANCE".equals(deductionType)
+            && totalGrossPay.compareTo(BigDecimal.ZERO) == 0) {
+            // 근무하지 않은 경우(급여 0원) 4대보험 면제
+            deductionType = "PART_TIME_NONE";
+        }
+
+        DeductionCalculator.TaxResult taxResult = DeductionCalculator.calculate(totalGrossPay, deductionType);
 
         BigDecimal fourMajorInsurance = taxResult.totalInsurance;
         BigDecimal incomeTax = taxResult.incomeTax;
@@ -177,6 +186,11 @@ public class SalaryService {
         BigDecimal totalDeduction = taxResult.totalDeduction;
 
         BigDecimal netPay = totalGrossPay.subtract(totalDeduction);
+
+        // 음수 급여 방지 (공제액이 급여를 초과하는 경우)
+        if (netPay.compareTo(BigDecimal.ZERO) < 0) {
+            netPay = BigDecimal.ZERO;
+        }
 
         // 기존 급여 정보 확인 또는 새로 생성
         List<Salary> existingSalaries = salaryRepository.findByContractIdAndYearAndMonth(contractId, year, month);
