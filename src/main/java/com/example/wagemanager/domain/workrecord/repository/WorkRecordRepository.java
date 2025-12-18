@@ -4,6 +4,7 @@ import com.example.wagemanager.domain.workrecord.entity.WorkRecord;
 import com.example.wagemanager.domain.workrecord.enums.WorkRecordStatus;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -100,6 +101,7 @@ public interface WorkRecordRepository extends JpaRepository<WorkRecord, Long> {
     );
 
     // 계약 정보 변경 시 미래 WorkRecord 삭제
+    @Modifying
     @Query("DELETE FROM WorkRecord wr " +
             "WHERE wr.contract.id = :contractId " +
             "AND wr.workDate > :date " +

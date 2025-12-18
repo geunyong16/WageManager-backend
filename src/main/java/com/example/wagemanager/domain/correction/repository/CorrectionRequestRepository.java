@@ -4,6 +4,7 @@ import com.example.wagemanager.domain.correction.entity.CorrectionRequest;
 import com.example.wagemanager.domain.correction.enums.CorrectionStatus;
 import com.example.wagemanager.domain.correction.enums.RequestType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -120,5 +121,17 @@ public interface CorrectionRequestRepository extends JpaRepository<CorrectionReq
             @Param("workDate") LocalDate workDate,
             @Param("startTime") LocalTime startTime,
             @Param("endTime") LocalTime endTime
+    );
+
+    // 계약 정보 변경 시 미래 WorkRecord를 참조하는 CorrectionRequest 삭제
+    @Modifying
+    @Query("DELETE FROM CorrectionRequest cr " +
+            "WHERE cr.workRecord.id IN " +
+            "(SELECT wr.id FROM WorkRecord wr WHERE wr.contract.id = :contractId " +
+            "AND wr.workDate > :date AND wr.status = :status)")
+    void deleteByWorkRecordContractAndDateAfterAndStatus(
+            @Param("contractId") Long contractId,
+            @Param("date") LocalDate date,
+            @Param("status") com.example.wagemanager.domain.workrecord.enums.WorkRecordStatus status
     );
 }

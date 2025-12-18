@@ -6,6 +6,7 @@ import com.example.wagemanager.common.exception.NotFoundException;
 import com.example.wagemanager.domain.allowance.entity.WeeklyAllowance;
 import com.example.wagemanager.domain.contract.entity.WorkerContract;
 import com.example.wagemanager.domain.contract.repository.WorkerContractRepository;
+import com.example.wagemanager.domain.correction.repository.CorrectionRequestRepository;
 import com.example.wagemanager.domain.notification.enums.NotificationActionType;
 import com.example.wagemanager.domain.notification.enums.NotificationType;
 import com.example.wagemanager.domain.notification.event.NotificationEvent;
@@ -33,6 +34,7 @@ public class WorkRecordCommandService {
 
     private final WorkRecordRepository workRecordRepository;
     private final WorkerContractRepository workerContractRepository;
+    private final CorrectionRequestRepository correctionRequestRepository;
     private final WorkRecordCoordinatorService coordinatorService;
     private final WorkRecordGenerationService workRecordGenerationService;
     private final ApplicationEventPublisher eventPublisher;
@@ -305,6 +307,10 @@ public class WorkRecordCommandService {
     public void regenerateFutureWorkRecords(Long contractId) {
         WorkerContract contract = workerContractRepository.findById(contractId)
                 .orElseThrow(() -> new NotFoundException(ErrorCode.CONTRACT_NOT_FOUND, "계약을 찾을 수 없습니다."));
+
+        // 삭제할 WorkRecord를 참조하는 CorrectionRequest 삭제
+        correctionRequestRepository.deleteByWorkRecordContractAndDateAfterAndStatus(
+                contractId, LocalDate.now(), WorkRecordStatus.SCHEDULED);
 
         // 오늘 이후의 SCHEDULED 상태 WorkRecord 삭제
         workRecordRepository.deleteByContractIdAndWorkDateAfterAndStatus(
